@@ -1,0 +1,18 @@
+# dependencies
+node_modules/
+
+# runtime data — notes, uploads, reminders, widget layouts.
+# NEVER commit: may contain personal notes, images and Telegram chat ids.
+data/
+
+# secrets — Telegram bot token etc.
+secret.env
+*.env
+!.env.example
+
+# local tooling / editor state (may contain machine-specific paths)
+.claude/
+*.log
+*.bak*
+Thumbs.db
+.DS_Store

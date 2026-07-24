@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MindBoard · Display</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&family=Roboto+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📺</text></svg>" />
+</head>
+<body class="display-page">
+  <header class="topbar">
+    <h1 class="logo">MindBoard</h1>
+    <div class="display-controls">
+      <button class="tag-chip period-btn" data-period="today">Today</button>
+      <button class="tag-chip period-btn" data-period="week">This Week</button>
+      <button class="tag-chip period-btn" data-period="month">This Month</button>
+      <button class="tag-chip period-btn active" data-period="all">All</button>
+      <span class="display-meta" id="displayMeta"></span>
+      <button id="uiModeToggle" class="icon-btn" title="Switch mobile / desktop layout">📱</button>
+      <a href="index.html" class="pill-btn" title="Back to the editable board">← Board</a>
+    </div>
+  </header>
+
+  <main class="container">
+    <div id="widgetCanvas" class="widget-canvas"></div>
+    <div id="board" class="board"></div>
+    <p id="displayEmpty" class="muted" style="text-align:center; padding:60px 0" hidden>Nothing here for this period.</p>
+  </main>
+
+  <script src="display.js"></script>
+  <script src="widgets.js"></script>
+</body>
+</html>

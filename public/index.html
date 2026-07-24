@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MindBoard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&family=Roboto+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧠</text></svg>" />
+</head>
+<body>
+  <header class="topbar">
+    <h1 class="logo">MindBoard</h1>
+    <div class="topbar-actions">
+      <button id="widgetEditBtn" class="pill-btn" title="Add, move, resize or remove widgets">⊞ <span class="btn-txt">Edit Widgets</span></button>
+      <a href="display.html" id="displayModeBtn" class="pill-btn" title="Open display mode (read-only, auto-refreshing)">📺 <span class="btn-txt">Display</span></a>
+      <select id="fontSelect" class="font-select" title="Dashboard font">
+        <option value="roboto">Roboto</option>
+        <option value="mono">Roboto Mono</option>
+        <option value="courier">Courier</option>
+      </select>
+      <button id="uiModeToggle" class="icon-btn" title="Switch mobile / desktop layout">📱</button>
+      <button id="themeToggle" class="icon-btn" title="Toggle light / dark mode">◐</button>
+    </div>
+  </header>
+
+  <main class="container">
+    <div class="search-row">
+      <div class="search-box">
+        <span class="search-icon">🔍</span>
+        <input id="searchInput" type="text" placeholder="Search by note title, text or tag..." autocomplete="off" />
+        <button id="clearSearch" class="clear-search" title="Clear search">✕</button>
+      </div>
+      <button id="addNoteBtn" class="add-btn" title="Add note">+</button>
+    </div>
+
+    <div class="tag-row" id="tagRow">
+      <button id="addTagBtn" class="tag-chip tag-action">+ Add Tag</button>
+      <button id="editTagsBtn" class="tag-chip tag-action"># Edit Tags</button>
+      <!-- tag bubbles injected here -->
+    </div>
+
+    <!-- ===== widget palette (visible in edit mode) ===== -->
+    <div id="widgetPalette" class="widget-palette" hidden>
+      <span class="palette-label">Add a widget:</span>
+      <button class="palette-item" data-type="whiteboard">✍️ Whiteboard</button>
+      <button class="palette-item" data-type="clock">🕐 Clock</button>
+      <button class="palette-item" data-type="timer">⏱ Timer</button>
+      <button class="palette-item" data-type="calendar">📅 Calendar</button>
+      <button class="palette-item" data-type="weather">🌤 Weather</button>
+      <button class="palette-item" data-type="reminders">⏰ Reminders</button>
+      <span class="palette-hint">Drag widgets to move · pull the corner to resize · ⚙ to configure · ✕ to remove</span>
+    </div>
+
+    <!-- ===== widget canvas ===== -->
+    <div id="widgetCanvas" class="widget-canvas"></div>
+
+    <div id="board" class="board"></div>
+    <div id="emptyState" class="empty-state" hidden>
+      <p>No notes yet.</p>
+      <p class="muted">Hit <strong>+</strong> to capture your first thought.</p>
+    </div>
+  </main>
+
+  <!-- ===== Note editor modal ===== -->
+  <div id="noteModal" class="modal-overlay" hidden>
+    <div class="modal note-modal">
+      <div class="modal-head">
+        <span id="noteModalDates" class="note-dates"></span>
+        <button class="icon-btn" id="closeNoteModal" title="Close">✕</button>
+      </div>
+
+      <input id="noteTitle" class="note-title-input" type="text" placeholder="Note title" />
+
+      <div class="mode-toggle">
+        <button id="modeNote" class="mode-btn active">📝 Note</button>
+        <button id="modeList" class="mode-btn">☑ To-Do List</button>
+        <button id="reminderToggle" class="mode-btn">⏰ Reminder</button>
+      </div>
+
+      <div id="reminderEditor" class="reminder-editor" hidden>
+        <input type="date" id="reminderDate" class="reminder-input" />
+        <input type="time" id="reminderTime" class="reminder-input" />
+        <select id="reminderFreq" class="reminder-input">
+          <option value="once">Once</option>
+          <option value="hourly">Hourly</option>
+          <option value="daily">Daily</option>
+          <option value="weekly">Weekly</option>
+        </select>
+        <button id="reminderClear" class="ghost-btn" title="Remove reminder">✕ Remove</button>
+        <span class="muted small reminder-note">Delivered via Telegram</span>
+      </div>
+
+      <textarea id="noteText" class="note-text-input" placeholder="type your note here" rows="6"></textarea>
+
+      <div id="checklistEditor" class="checklist-editor" hidden>
+        <div id="checklistItems"></div>
+        <button id="addChecklistItem" class="ghost-btn">+ Add item</button>
+      </div>
+
+      <div id="noteImages" class="note-images-edit"></div>
+
+      <div class="edit-section">
+        <span class="edit-label">Tags</span>
+        <div id="noteTagPicker" class="tag-picker"></div>
+      </div>
+
+      <div class="edit-section">
+        <span class="edit-label">Outline color</span>
+        <div id="outlineColors" class="swatch-row"></div>
+      </div>
+
+      <div class="edit-section">
+        <span class="edit-label">Text color</span>
+        <div id="textColors" class="swatch-row"></div>
+      </div>
+
+      <div class="modal-actions">
+        <button id="deleteNoteBtn" class="tool-btn danger" title="Delete note">🗑</button>
+        <button id="pinNoteBtn" class="tool-btn" title="Pin note">📌 Pin</button>
+        <label class="tool-btn" for="imageUpload" title="Attach image">🖼 Image
+          <input id="imageUpload" type="file" accept="image/*" multiple hidden />
+        </label>
+        <span class="spacer"></span>
+        <button id="cancelNoteBtn" class="ghost-btn">Cancel</button>
+        <button id="saveNoteBtn" class="save-btn">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Tag manager modal ===== -->
+  <div id="tagModal" class="modal-overlay" hidden>
+    <div class="modal tag-modal">
+      <div class="modal-head">
+        <span class="modal-title" id="tagModalTitle">Add Tag</span>
+        <button class="icon-btn" id="closeTagModal" title="Close">✕</button>
+      </div>
+
+      <div id="tagCreateSection">
+        <input id="tagNameInput" class="note-title-input" type="text" placeholder="# TAGNAME" maxlength="24" />
+        <p class="muted small">The tag name is used to sort and filter your notes.</p>
+        <div class="edit-section">
+          <span class="edit-label">Color</span>
+          <div id="tagColorRow" class="swatch-row"></div>
+        </div>
+        <button id="createTagBtn" class="save-btn wide">Create Tag</button>
+      </div>
+
+      <div id="tagEditSection" hidden>
+        <div id="tagEditList" class="tag-edit-list"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== fullscreen whiteboard editor ===== -->
+  <div id="wbOverlay" class="wb-overlay" hidden>
+    <div class="wb-toolbar">
+      <div class="wb-tools-left">
+        <button class="wb-color selected" data-color="auto" title="Theme color" style="background:linear-gradient(135deg,#e6e8e4 50%,#1c1e1c 50%)"></button>
+        <button class="wb-color" data-color="#f87171" style="background:#f87171"></button>
+        <button class="wb-color" data-color="#fb923c" style="background:#fb923c"></button>
+        <button class="wb-color" data-color="#fbbf24" style="background:#fbbf24"></button>
+        <button class="wb-color" data-color="#4ade80" style="background:#4ade80"></button>
+        <button class="wb-color" data-color="#22d3ee" style="background:#22d3ee"></button>
+        <button class="wb-color" data-color="#60a5fa" style="background:#60a5fa"></button>
+        <button class="wb-color" data-color="#c084fc" style="background:#c084fc"></button>
+        <button class="wb-color" data-color="#f472b6" style="background:#f472b6"></button>
+        <span class="wb-sep"></span>
+        <button id="wbPen" class="tool-btn pinned-active" title="Pen">✒️</button>
+        <button id="wbHl" class="tool-btn" title="Highlighter">🖍️</button>
+        <button id="wbEraser" class="tool-btn" title="Eraser">🧽</button>
+        <span class="wb-sep"></span>
+        <input id="wbSize" type="range" min="1" max="14" value="3" title="Pen size" />
+        <span class="wb-sep"></span>
+        <button id="wbUndo" class="tool-btn" title="Undo (Ctrl+Z)">↩</button>
+        <button id="wbRedo" class="tool-btn" title="Redo (Ctrl+Y)">↪</button>
+        <button id="wbClear" class="tool-btn danger" title="Clear whiteboard">🗑</button>
+      </div>
+      <div class="wb-tools-right">
+        <button id="wbTouchMode" class="tool-btn" title="Choose whether fingers can draw (palm rejection)">✍️ Pen only</button>
+        <span id="wbStatus" class="muted small"></span>
+        <button id="wbClose" class="save-btn">✓ Done</button>
+      </div>
+    </div>
+    <canvas id="wbCanvas" class="wb-canvas"></canvas>
+  </div>
+
+  <!-- ===== widget config modal ===== -->
+  <div id="widgetConfigModal" class="modal-overlay" hidden>
+    <div class="modal">
+      <div class="modal-head">
+        <span class="modal-title" id="widgetConfigTitle">Widget settings</span>
+        <button class="icon-btn" id="closeWidgetConfig" title="Close">✕</button>
+      </div>
+      <div id="widgetConfigBody"></div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+  <script src="widgets.js"></script>
+</body>
+</html>
