@@ -68,6 +68,31 @@
   function tgPing(text) {
     fetch('/api/notify', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }) }).catch(() => {});
   }
+  function fmtSW(ms) {
+    const cs = Math.floor(ms / 10) % 100, s = Math.floor(ms / 1000) % 60, m = Math.floor(ms / 60000);
+    return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}.${String(cs).padStart(2, '0')}`;
+  }
+  function hexToRgb(hex) {
+    const h = hex.replace('#', '');
+    return { r: parseInt(h.slice(0, 2), 16), g: parseInt(h.slice(2, 4), 16), b: parseInt(h.slice(4, 6), 16) };
+  }
+  function rgbToHsl(r, g, b) {
+    r /= 255; g /= 255; b /= 255;
+    const max = Math.max(r, g, b), min = Math.min(r, g, b);
+    let h, s, l = (max + min) / 2;
+    if (max === min) { h = s = 0; }
+    else {
+      const d = max - min;
+      s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+      switch (max) {
+        case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+        case g: h = (b - r) / d + 2; break;
+        default: h = (r - g) / d + 4;
+      }
+      h /= 6;
+    }
+    return `hsl(${Math.round(h * 360)}, ${Math.round(s * 100)}%, ${Math.round(l * 100)}%)`;
+  }
 
   const WORDS = [
     { w: 'Petrichor', pos: 'noun', def: 'The pleasant, earthy smell after rain falls on dry ground.', ex: 'The petrichor drifted in as the first spring storm arrived.' },
@@ -1213,6 +1238,194 @@
         inp.oninput = compute;
         inp.onchange = () => { const n = parseInt(inp.value, 10); if (!Number.isNaN(n)) { w.config.last = n; wapi.put(w.id, { config: w.config }); } };
         compute();
+      },
+    },
+
+    /* ---------- stopwatch ---------- */
+    stopwatch: {
+      label: 'Stopwatch',
+      defaults: { w: 260, h: 250, config: {} },
+      _clear(w) { if (w._sw && w._sw.timer) { clearInterval(w._sw.timer); w._sw.timer = null; } },
+      render(body, w) {
+        if (!w._sw) w._sw = { running: false, elapsed: 0, start: 0, laps: [] };
+        this._clear(w);
+        const sw = w._sw;
+        body.innerHTML = `
+          <div class="wg-sw">
+            <div class="wg-sw-time">00:00.00</div>
+            <div class="wg-sw-btns">
+              <button class="wg-btn wg-sw-toggle"></button>
+              <button class="wg-btn wg-sw-lap">Lap</button>
+              <button class="wg-btn wg-sw-reset">Reset</button>
+            </div>
+            <div class="wg-sw-laps"></div>
+          </div>`;
+        const stop = (e2) => e2 && e2.addEventListener('pointerdown', (e) => e.stopPropagation());
+        const toggle = body.querySelector('.wg-sw-toggle'), lap = body.querySelector('.wg-sw-lap'), reset = body.querySelector('.wg-sw-reset');
+        [toggle, lap, reset].forEach(stop);
+        const paint = () => {
+          const ms = sw.elapsed + (sw.running ? Date.now() - sw.start : 0);
+          const t = body.querySelector('.wg-sw-time'); if (t) t.textContent = fmtSW(ms);
+        };
+        const startLoop = () => { this._clear(w); sw.timer = setInterval(() => { if (!body.isConnected) { this._clear(w); return; } paint(); }, 50); };
+        const renderLaps = () => {
+          const el2 = body.querySelector('.wg-sw-laps');
+          el2.innerHTML = sw.laps.map((ms, i) => `<div class="wg-sw-lap-row"><span>Lap ${sw.laps.length - i}</span><span>${fmtSW(ms)}</span></div>`).join('');
+        };
+        toggle.onclick = (e) => {
+          e.stopPropagation();
+          if (sw.running) { sw.elapsed += Date.now() - sw.start; sw.running = false; this._clear(w); }
+          else { sw.start = Date.now(); sw.running = true; startLoop(); }
+          toggle.textContent = sw.running ? '⏸ Stop' : '▶ Start';
+          paint();
+        };
+        lap.onclick = (e) => { e.stopPropagation(); if (!sw.running && !sw.elapsed) return; sw.laps.unshift(sw.elapsed + (sw.running ? Date.now() - sw.start : 0)); renderLaps(); };
+        reset.onclick = (e) => { e.stopPropagation(); this._clear(w); w._sw = { running: false, elapsed: 0, start: 0, laps: [] }; this.render(body, w); };
+        toggle.textContent = sw.running ? '⏸ Stop' : '▶ Start';
+        renderLaps();
+        if (sw.running) startLoop();
+        paint();
+      },
+    },
+
+    /* ---------- time progress ---------- */
+    timeprogress: {
+      label: 'Time Progress',
+      defaults: { w: 280, h: 220, config: {} },
+      render(body, w) {
+        body.innerHTML = `
+          <div class="wg-tp">
+            <div class="wg-tp-title">📊 Time Progress</div>
+            ${['Day', 'Week', 'Month', 'Year'].map((l) => `
+              <div class="wg-tp-row" data-k="${l}">
+                <div class="wg-tp-lbl"><span>${l}</span><span class="wg-tp-pct"></span></div>
+                <div class="wg-tp-bar"><div class="wg-tp-fill"></div></div>
+              </div>`).join('')}
+          </div>`;
+        this.tick(body, w);
+      },
+      tick(body, w) {
+        const now = new Date();
+        const midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const msToday = now - midnight;
+        const daysSinceMon = (now.getDay() + 6) % 7;
+        const yearStart = new Date(now.getFullYear(), 0, 0), yearEnd = new Date(now.getFullYear() + 1, 0, 0);
+        const pct = {
+          Day: msToday / 864e5,
+          Week: (daysSinceMon * 864e5 + msToday) / (7 * 864e5),
+          Month: (now.getDate() - 1 + now.getHours() / 24) / new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate(),
+          Year: (now - yearStart) / (yearEnd - yearStart),
+        };
+        body.querySelectorAll('.wg-tp-row').forEach((row) => {
+          const p = Math.min(1, Math.max(0, pct[row.dataset.k]));
+          row.querySelector('.wg-tp-fill').style.width = (p * 100).toFixed(1) + '%';
+          row.querySelector('.wg-tp-pct').textContent = (p * 100).toFixed(1) + '%';
+        });
+      },
+    },
+
+    /* ---------- scratchpad ---------- */
+    scratchpad: {
+      label: 'Scratchpad',
+      defaults: { w: 280, h: 200, config: { text: '' } },
+      render(body, w) {
+        body.innerHTML = `<div class="wg-scratch"><textarea class="wg-scratch-ta" placeholder="Quick notes… (auto-saves)">${escw(w.config.text || '')}</textarea><div class="wg-scratch-status"></div></div>`;
+        const ta = body.querySelector('.wg-scratch-ta');
+        ta.addEventListener('pointerdown', (e) => e.stopPropagation());
+        let t;
+        ta.oninput = () => {
+          w.config.text = ta.value;
+          const s = body.querySelector('.wg-scratch-status'); if (s) s.textContent = 'saving…';
+          clearTimeout(t);
+          t = setTimeout(() => { wapi.put(w.id, { config: w.config }); const s2 = body.querySelector('.wg-scratch-status'); if (s2) s2.textContent = 'saved ✓'; }, 700);
+        };
+      },
+    },
+
+    /* ---------- color picker ---------- */
+    colorpicker: {
+      label: 'Color Picker',
+      defaults: { w: 240, h: 210, config: { color: '#4ade80' } },
+      render(body, w) {
+        const c = w.config.color || '#4ade80';
+        body.innerHTML = `
+          <div class="wg-cp">
+            <input type="color" class="wg-cp-input" value="${c}"/>
+            <div class="wg-cp-vals">
+              <button class="wg-cp-val" data-v="hex"></button>
+              <button class="wg-cp-val" data-v="rgb"></button>
+              <button class="wg-cp-val" data-v="hsl"></button>
+            </div>
+            <div class="wg-cp-status">tap a value to copy</div>
+          </div>`;
+        const inp = body.querySelector('.wg-cp-input');
+        inp.addEventListener('pointerdown', (e) => e.stopPropagation());
+        const upd = (persist) => {
+          const hex = inp.value;
+          const { r, g, b } = hexToRgb(hex);
+          body.querySelector('[data-v=hex]').textContent = hex.toUpperCase();
+          body.querySelector('[data-v=rgb]').textContent = `rgb(${r}, ${g}, ${b})`;
+          body.querySelector('[data-v=hsl]').textContent = rgbToHsl(r, g, b);
+          if (persist) { w.config.color = hex; wapi.put(w.id, { config: w.config }); }
+        };
+        inp.oninput = () => upd(false);
+        inp.onchange = () => upd(true);
+        body.querySelectorAll('.wg-cp-val').forEach((b) => {
+          b.addEventListener('pointerdown', (e) => e.stopPropagation());
+          b.onclick = async (e) => {
+            e.stopPropagation();
+            try { await navigator.clipboard.writeText(b.textContent); body.querySelector('.wg-cp-status').textContent = 'copied ' + b.dataset.v + ' ✓'; }
+            catch { body.querySelector('.wg-cp-status').textContent = b.textContent; }
+          };
+        });
+        upd(false);
+      },
+    },
+
+    /* ---------- password generator ---------- */
+    passwordgen: {
+      label: 'Password Gen',
+      defaults: { w: 280, h: 220, config: { len: 16, upper: true, lower: true, num: true, sym: true } },
+      render(body, w) {
+        const c = w.config;
+        body.innerHTML = `
+          <div class="wg-pw">
+            <div class="wg-pw-out" title="Generated password">tap Generate</div>
+            <div class="wg-pw-row"><input type="range" min="6" max="40" value="${c.len || 16}" class="wg-pw-len"/><span class="wg-pw-lenval">${c.len || 16}</span></div>
+            <div class="wg-pw-opts">
+              <label><input type="checkbox" data-o="upper" ${c.upper ? 'checked' : ''}/>A-Z</label>
+              <label><input type="checkbox" data-o="lower" ${c.lower ? 'checked' : ''}/>a-z</label>
+              <label><input type="checkbox" data-o="num" ${c.num ? 'checked' : ''}/>0-9</label>
+              <label><input type="checkbox" data-o="sym" ${c.sym ? 'checked' : ''}/>!@#</label>
+            </div>
+            <div class="wg-pw-btns"><button class="wg-btn wg-pw-gen">🎲 Generate</button><button class="wg-btn wg-pw-copy">Copy</button></div>
+          </div>`;
+        const stop = (e2) => e2 && e2.addEventListener('pointerdown', (e) => e.stopPropagation());
+        body.querySelectorAll('input,button,label').forEach(stop);
+        const lenInput = body.querySelector('.wg-pw-len');
+        lenInput.oninput = () => { body.querySelector('.wg-pw-lenval').textContent = lenInput.value; };
+        lenInput.onchange = () => { c.len = +lenInput.value; wapi.put(w.id, { config: c }); };
+        body.querySelectorAll('.wg-pw-opts input').forEach((cb) => (cb.onchange = () => { c[cb.dataset.o] = cb.checked; wapi.put(w.id, { config: c }); }));
+        const out = body.querySelector('.wg-pw-out');
+        const gen = () => {
+          let pool = '';
+          if (c.upper) pool += 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+          if (c.lower) pool += 'abcdefghijkmnpqrstuvwxyz';
+          if (c.num) pool += '23456789';
+          if (c.sym) pool += '!@#$%^&*-_=+?';
+          if (!pool) { out.textContent = 'pick a set'; return; }
+          const n = +lenInput.value;
+          const rnd = new Uint32Array(n); crypto.getRandomValues(rnd);
+          let pw = '';
+          for (let i = 0; i < n; i++) pw += pool[rnd[i] % pool.length];
+          out.textContent = pw;
+        };
+        body.querySelector('.wg-pw-gen').onclick = (e) => { e.stopPropagation(); gen(); };
+        body.querySelector('.wg-pw-copy').onclick = async (e) => {
+          e.stopPropagation();
+          const t = out.textContent;
+          if (t && t.length > 4) { try { await navigator.clipboard.writeText(t); out.title = 'copied ✓'; } catch {} }
+        };
       },
     },
   };
