@@ -45,6 +45,102 @@
     95: ['⛈', 'Thunderstorm'], 96: ['⛈', 'Storm w/ hail'], 99: ['⛈', 'Storm w/ hail'],
   };
 
+  /* ================= learning-widget data & helpers ================= */
+  function dayIndex(n) {
+    const d = new Date();
+    const doy = Math.floor((d - new Date(d.getFullYear(), 0, 0)) / 864e5);
+    return ((doy % n) + n) % n;
+  }
+  function shuffle(a) {
+    for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+    return a;
+  }
+  function ymd(d) { return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
+  function beep(freq = 880, dur = 0.5) {
+    try {
+      const ac = new (window.AudioContext || window.webkitAudioContext)();
+      const o = ac.createOscillator(), g = ac.createGain();
+      o.connect(g); g.connect(ac.destination);
+      o.frequency.value = freq; g.gain.value = 0.07;
+      o.start(); o.stop(ac.currentTime + dur);
+    } catch {}
+  }
+  function tgPing(text) {
+    fetch('/api/notify', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }) }).catch(() => {});
+  }
+
+  const WORDS = [
+    { w: 'Petrichor', pos: 'noun', def: 'The pleasant, earthy smell after rain falls on dry ground.', ex: 'The petrichor drifted in as the first spring storm arrived.' },
+    { w: 'Sonder', pos: 'noun', def: 'The realization that each passerby is living a life as vivid and complex as your own.', ex: 'A wave of sonder hit her on the crowded train.' },
+    { w: 'Ephemeral', pos: 'adj', def: 'Lasting for a very short time.', ex: 'Fame can be ephemeral — here today, gone tomorrow.' },
+    { w: 'Serendipity', pos: 'noun', def: 'The occurrence of happy or beneficial events by chance.', ex: 'Finding that book was pure serendipity.' },
+    { w: 'Ineffable', pos: 'adj', def: 'Too great or extreme to be expressed in words.', ex: 'The view from the summit was ineffable.' },
+    { w: 'Mellifluous', pos: 'adj', def: 'Sweet or musical; pleasant to hear.', ex: 'Her mellifluous voice calmed the room.' },
+    { w: 'Quixotic', pos: 'adj', def: 'Extremely idealistic; unrealistic and impractical.', ex: 'A quixotic plan to end all traffic overnight.' },
+    { w: 'Halcyon', pos: 'adj', def: 'Denoting a past time that was idyllically happy and peaceful.', ex: 'The halcyon days of summer.' },
+    { w: 'Ubiquitous', pos: 'adj', def: 'Present, appearing, or found everywhere.', ex: 'Smartphones are now ubiquitous.' },
+    { w: 'Susurrus', pos: 'noun', def: 'A whispering or rustling sound.', ex: 'The susurrus of leaves in the wind.' },
+    { w: 'Eloquent', pos: 'adj', def: 'Fluent or persuasive in speaking or writing.', ex: 'An eloquent plea for kindness.' },
+    { w: 'Resilience', pos: 'noun', def: 'The capacity to recover quickly from difficulties.', ex: 'Her resilience carried the team through.' },
+    { w: 'Nascent', pos: 'adj', def: 'Just coming into existence and beginning to show potential.', ex: 'A nascent industry with huge promise.' },
+    { w: 'Pragmatic', pos: 'adj', def: 'Dealing with things sensibly and realistically.', ex: 'A pragmatic approach to the budget.' },
+    { w: 'Luminous', pos: 'adj', def: 'Full of or shedding light; radiant.', ex: 'A luminous full moon.' },
+    { w: 'Solitude', pos: 'noun', def: 'The state of being alone, often by choice and at peace.', ex: 'He found clarity in solitude.' },
+    { w: 'Tenacity', pos: 'noun', def: 'The quality of being determined and persistent.', ex: 'Her tenacity won the marathon.' },
+    { w: 'Zenith', pos: 'noun', def: 'The time at which something is most powerful or successful.', ex: 'At the zenith of her career.' },
+    { w: 'Cathartic', pos: 'adj', def: 'Providing psychological relief through the release of emotions.', ex: 'A cathartic good cry.' },
+    { w: 'Diligent', pos: 'adj', def: 'Having or showing care and effort in work.', ex: 'A diligent student who never skips.' },
+    { w: 'Empathy', pos: 'noun', def: 'The ability to understand and share the feelings of another.', ex: 'She listened with real empathy.' },
+    { w: 'Fortitude', pos: 'noun', def: 'Courage in pain or adversity.', ex: 'He faced the news with fortitude.' },
+    { w: 'Gregarious', pos: 'adj', def: 'Fond of company; sociable.', ex: 'A gregarious host who knew everyone.' },
+    { w: 'Meticulous', pos: 'adj', def: 'Showing great attention to detail; very careful.', ex: 'Meticulous notes filled the margins.' },
+    { w: 'Panacea', pos: 'noun', def: 'A supposed remedy for all difficulties or diseases.', ex: 'Money is no panacea for unhappiness.' },
+    { w: 'Wanderlust', pos: 'noun', def: 'A strong desire to travel and explore the world.', ex: 'Her wanderlust took her to six continents.' },
+    { w: 'Equanimity', pos: 'noun', def: 'Mental calmness and composure, especially in difficulty.', ex: 'She handled the crisis with equanimity.' },
+    { w: 'Sagacious', pos: 'adj', def: 'Having keen mental discernment and good judgment; wise.', ex: 'A sagacious investor who saw the crash coming.' },
+    { w: 'Ardent', pos: 'adj', def: 'Very enthusiastic or passionate.', ex: 'An ardent supporter of the cause.' },
+    { w: 'Lucid', pos: 'adj', def: 'Expressed clearly; easy to understand.', ex: 'A lucid explanation of a hard idea.' },
+  ];
+
+  const FLASHCARDS = {
+    es: { name: 'Spanish', cards: [
+      { f: 'Hola', b: 'Hello' }, { f: 'Gracias', b: 'Thank you' }, { f: 'Por favor', b: 'Please' },
+      { f: 'Buenos días', b: 'Good morning' }, { f: '¿Cómo estás?', b: 'How are you?' }, { f: 'Lo siento', b: "I'm sorry" },
+      { f: '¿Cuánto cuesta?', b: 'How much is it?' }, { f: 'No entiendo', b: "I don't understand" },
+      { f: '¿Dónde está el baño?', b: 'Where is the bathroom?' }, { f: 'Salud', b: 'Cheers / Bless you' },
+      { f: 'Hasta luego', b: 'See you later' }, { f: 'Me gusta', b: 'I like it' },
+    ] },
+    fr: { name: 'French', cards: [
+      { f: 'Bonjour', b: 'Hello / Good day' }, { f: 'Merci', b: 'Thank you' }, { f: "S'il vous plaît", b: 'Please' },
+      { f: 'Excusez-moi', b: 'Excuse me' }, { f: 'Comment ça va?', b: 'How are you?' }, { f: 'Je ne sais pas', b: "I don't know" },
+      { f: 'Où sont les toilettes?', b: 'Where is the toilet?' }, { f: "C'est combien?", b: 'How much is it?' },
+      { f: 'Je voudrais…', b: 'I would like…' }, { f: 'À bientôt', b: 'See you soon' },
+      { f: "Je t'aime", b: 'I love you' }, { f: 'Santé', b: 'Cheers' },
+    ] },
+    de: { name: 'German', cards: [
+      { f: 'Hallo', b: 'Hello' }, { f: 'Danke', b: 'Thank you' }, { f: 'Bitte', b: "Please / You're welcome" },
+      { f: 'Guten Morgen', b: 'Good morning' }, { f: 'Wie geht es dir?', b: 'How are you?' }, { f: 'Entschuldigung', b: 'Excuse me / Sorry' },
+      { f: 'Ich verstehe nicht', b: "I don't understand" }, { f: 'Wie viel kostet das?', b: 'How much is it?' },
+      { f: 'Wo ist die Toilette?', b: 'Where is the toilet?' }, { f: 'Prost', b: 'Cheers' },
+      { f: 'Bis später', b: 'See you later' }, { f: 'Ich mag das', b: 'I like it' },
+    ] },
+    it: { name: 'Italian', cards: [
+      { f: 'Ciao', b: 'Hi / Bye' }, { f: 'Grazie', b: 'Thank you' }, { f: 'Per favore', b: 'Please' },
+      { f: 'Buongiorno', b: 'Good morning' }, { f: 'Come stai?', b: 'How are you?' }, { f: 'Mi dispiace', b: "I'm sorry" },
+      { f: 'Non capisco', b: "I don't understand" }, { f: 'Quanto costa?', b: 'How much is it?' },
+      { f: "Dov'è il bagno?", b: 'Where is the bathroom?' }, { f: 'Salute', b: 'Cheers' },
+      { f: 'A dopo', b: 'See you later' }, { f: 'Mi piace', b: 'I like it' },
+    ] },
+    ja: { name: 'Japanese', cards: [
+      { f: 'Konnichiwa', b: 'Hello', p: 'こんにちは' }, { f: 'Arigatou', b: 'Thank you', p: 'ありがとう' },
+      { f: 'Onegaishimasu', b: 'Please', p: 'お願いします' }, { f: 'Ohayou', b: 'Good morning', p: 'おはよう' },
+      { f: 'Genki desu ka?', b: 'How are you?', p: '元気ですか' }, { f: 'Sumimasen', b: 'Excuse me / Sorry', p: 'すみません' },
+      { f: 'Wakarimasen', b: "I don't understand", p: 'わかりません' }, { f: 'Ikura desu ka?', b: 'How much is it?', p: 'いくらですか' },
+      { f: 'Toire wa doko desu ka?', b: 'Where is the toilet?', p: 'トイレはどこですか' }, { f: 'Kanpai', b: 'Cheers', p: '乾杯' },
+      { f: 'Mata ne', b: 'See you', p: 'またね' }, { f: 'Suki desu', b: 'I like it', p: '好きです' },
+    ] },
+  };
+
   const TYPES = {
     /* ---------- clock ---------- */
     clock: {
@@ -496,6 +592,292 @@
         if (EDITABLE) {
           body.querySelector('.wg-wb').onclick = () => { if (!editMode) openWhiteboard(w); };
         }
+      },
+    },
+
+    /* ---------- word of the day ---------- */
+    wotd: {
+      label: 'Word of the Day',
+      defaults: { w: 320, h: 210, config: { learned: [], pick: null, day: null } },
+      render(body, w) {
+        const today = new Date().toDateString();
+        body.dataset.d = today;
+        let idx = (w.config.pick != null && w.config.day === today) ? w.config.pick : dayIndex(WORDS.length);
+        idx = ((idx % WORDS.length) + WORDS.length) % WORDS.length;
+        const word = WORDS[idx];
+        const learned = (w.config.learned || []).includes(word.w);
+        body.innerHTML = `
+          <div class="wg-wotd">
+            <div class="wg-wotd-head">
+              <span class="wg-wotd-word">${escw(word.w)}</span>
+              <span class="wg-wotd-pos">${escw(word.pos)}</span>
+            </div>
+            <div class="wg-wotd-def">${escw(word.def)}</div>
+            <div class="wg-wotd-ex">&ldquo;${escw(word.ex)}&rdquo;</div>
+            <div class="wg-wotd-foot">
+              <button class="wg-btn wg-wotd-learned ${learned ? 'on' : ''}">${learned ? '✓ Learned' : '＋ Learned'}</button>
+              <span class="wg-wotd-count">${(w.config.learned || []).length} learned</span>
+              <button class="wg-btn wg-wotd-new">↻ New</button>
+            </div>
+          </div>`;
+        const stop = (e2) => e2 && e2.addEventListener('pointerdown', (e) => e.stopPropagation());
+        const nb = body.querySelector('.wg-wotd-new'); stop(nb);
+        const lb = body.querySelector('.wg-wotd-learned'); stop(lb);
+        nb.onclick = (e) => {
+          e.stopPropagation();
+          let n; do { n = Math.floor(Math.random() * WORDS.length); } while (n === idx && WORDS.length > 1);
+          w.config.pick = n; w.config.day = today;
+          wapi.put(w.id, { config: w.config });
+          this.render(body, w);
+        };
+        lb.onclick = (e) => {
+          e.stopPropagation();
+          w.config.learned = w.config.learned || [];
+          const i = w.config.learned.indexOf(word.w);
+          if (i >= 0) w.config.learned.splice(i, 1); else w.config.learned.push(word.w);
+          wapi.put(w.id, { config: w.config });
+          this.render(body, w);
+        };
+      },
+      tick(body, w) {
+        const today = new Date().toDateString();
+        if (body.dataset.d && body.dataset.d !== today) this.render(body, w);
+      },
+    },
+
+    /* ---------- language flashcards ---------- */
+    flashcards: {
+      label: 'Flashcards',
+      defaults: { w: 300, h: 230, config: { deck: 'es' } },
+      render(body, w) {
+        const deck = FLASHCARDS[w.config.deck] || FLASHCARDS.es;
+        if (!w._fc || w._fc.key !== w.config.deck) {
+          w._fc = { key: w.config.deck, order: shuffle([...deck.cards.keys()]), pos: 0, flip: false, known: 0 };
+        }
+        const st = w._fc;
+        const card = deck.cards[st.order[st.pos]];
+        body.innerHTML = `
+          <div class="wg-fc">
+            <div class="wg-fc-head"><span>🎴 ${escw(deck.name)}</span><span>${st.pos + 1}/${deck.cards.length} · ✓ ${st.known}</span></div>
+            <div class="wg-fc-card ${st.flip ? 'flipped' : ''}">
+              ${st.flip
+                ? `<div class="wg-fc-face">${escw(card.b)}</div>`
+                : `<div class="wg-fc-face">${escw(card.f)}${card.p ? `<span class="wg-fc-pron">${escw(card.p)}</span>` : ''}</div>`}
+            </div>
+            <div class="wg-fc-foot">
+              <button class="wg-btn wg-fc-again">↻ Again</button>
+              <button class="wg-btn wg-fc-flip">${st.flip ? 'Front' : 'Flip'}</button>
+              <button class="wg-btn wg-fc-got">✓ Got it</button>
+            </div>
+          </div>`;
+        const stop = (e2) => e2 && e2.addEventListener('pointerdown', (e) => e.stopPropagation());
+        const cardEl = body.querySelector('.wg-fc-card'); stop(cardEl);
+        cardEl.onclick = (e) => { e.stopPropagation(); st.flip = !st.flip; this.render(body, w); };
+        const flip = body.querySelector('.wg-fc-flip'); stop(flip);
+        flip.onclick = (e) => { e.stopPropagation(); st.flip = !st.flip; this.render(body, w); };
+        const again = body.querySelector('.wg-fc-again'); stop(again);
+        again.onclick = (e) => { e.stopPropagation(); this.advance(body, w, false); };
+        const got = body.querySelector('.wg-fc-got'); stop(got);
+        got.onclick = (e) => { e.stopPropagation(); this.advance(body, w, true); };
+      },
+      advance(body, w, knew) {
+        const deck = FLASHCARDS[w.config.deck] || FLASHCARDS.es;
+        const st = w._fc;
+        if (knew) st.known++;
+        st.flip = false;
+        st.pos++;
+        if (st.pos >= deck.cards.length) { st.pos = 0; st.known = 0; st.order = shuffle([...deck.cards.keys()]); }
+        this.render(body, w);
+      },
+      configUI(wrap, w, save) {
+        wrap.innerHTML = `<span class="edit-label">Deck</span><div class="cfg-row" style="flex-wrap:wrap">` +
+          Object.entries(FLASHCARDS).map(([k, d]) => `<button class="tag-chip fc-pick ${w.config.deck === k ? 'active' : ''}" data-k="${k}">${escw(d.name)}</button>`).join('') +
+          `</div>`;
+        wrap.querySelectorAll('.fc-pick').forEach((b) => (b.onclick = () => { w.config.deck = b.dataset.k; w._fc = null; save(); closeConfig(); }));
+      },
+    },
+
+    /* ---------- pomodoro focus ---------- */
+    pomodoro: {
+      label: 'Pomodoro',
+      defaults: { w: 240, h: 270, config: { work: 25, brk: 5, longBrk: 15, done: 0, date: null } },
+      total(w, p) { return ((p.phase === 'work' ? w.config.work : p.phase === 'long' ? w.config.longBrk : w.config.brk) || 25) * 60; },
+      render(body, w) {
+        if (!w._pomo) w._pomo = { phase: 'work', left: (w.config.work || 25) * 60, running: false, round: 0 };
+        const p = w._pomo;
+        const label = p.phase === 'work' ? '🎯 Focus' : p.phase === 'long' ? '🌙 Long break' : '☕ Break';
+        const today = new Date().toDateString();
+        const doneToday = w.config.date === today ? (w.config.done || 0) : 0;
+        body.innerHTML = `
+          <div class="wg-pomo phase-${p.phase}">
+            <svg class="wg-pomo-ring" viewBox="0 0 100 100"><circle class="ring-bg" cx="50" cy="50" r="44"/><circle class="ring-fg" cx="50" cy="50" r="44"/></svg>
+            <div class="wg-pomo-mid">
+              <div class="wg-pomo-phase">${label}</div>
+              <div class="wg-pomo-time"></div>
+              <div class="wg-pomo-btns">
+                <button class="wg-pomo-start" title="Start / pause">▶</button>
+                <button class="wg-pomo-skip" title="Skip phase">⏭</button>
+                <button class="wg-pomo-reset" title="Reset">↺</button>
+              </div>
+            </div>
+            <div class="wg-pomo-foot">🍅 ${doneToday} today · round ${(p.round % 4) + 1}/4</div>
+          </div>`;
+        const stop = (e2) => e2 && e2.addEventListener('pointerdown', (e) => e.stopPropagation());
+        const s = body.querySelector('.wg-pomo-start'), sk = body.querySelector('.wg-pomo-skip'), rs = body.querySelector('.wg-pomo-reset');
+        stop(s); stop(sk); stop(rs);
+        s.onclick = (e) => { e.stopPropagation(); if (p.left <= 0) p.left = this.total(w, p); p.running = !p.running; this.paint(body, w); };
+        sk.onclick = (e) => { e.stopPropagation(); this.complete(body, w, true); };
+        rs.onclick = (e) => { e.stopPropagation(); w._pomo = { phase: 'work', left: (w.config.work || 25) * 60, running: false, round: 0 }; this.render(body, w); };
+        this.paint(body, w);
+      },
+      paint(body, w) {
+        const p = w._pomo; if (!p) return;
+        const timeEl = body.querySelector('.wg-pomo-time'); if (!timeEl) return;
+        timeEl.textContent = `${String(Math.floor(p.left / 60)).padStart(2, '0')}:${String(p.left % 60).padStart(2, '0')}`;
+        const s = body.querySelector('.wg-pomo-start'); if (s) s.textContent = p.running ? '⏸' : '▶';
+        const total = this.total(w, p);
+        const ring = body.querySelector('.ring-fg');
+        if (ring) { const C = 2 * Math.PI * 44; ring.style.strokeDasharray = C; ring.style.strokeDashoffset = C * (1 - (total ? p.left / total : 0)); }
+      },
+      tick(body, w) {
+        const p = w._pomo; if (!p || !p.running) { return; }
+        if (p.left > 0) { p.left--; if (p.left === 0) { this.complete(body, w, false); return; } }
+        this.paint(body, w);
+      },
+      complete(body, w, skipped) {
+        const p = w._pomo;
+        beep(p.phase === 'work' ? 660 : 880);
+        if (p.phase === 'work') {
+          if (!skipped) {
+            const today = new Date().toDateString();
+            if (w.config.date !== today) { w.config.date = today; w.config.done = 0; }
+            w.config.done = (w.config.done || 0) + 1;
+            wapi.put(w.id, { config: w.config });
+          }
+          p.round++;
+          if (p.round % 4 === 0) { p.phase = 'long'; if (!skipped) tgPing('🍅 Four focus sessions done — take a long break!'); }
+          else { p.phase = 'brk'; if (!skipped) tgPing('🎯 Focus session complete — time for a break.'); }
+        } else {
+          p.phase = 'work'; if (!skipped) tgPing('☕ Break over — back to focus.');
+        }
+        p.left = this.total(w, p);
+        this.render(body, w);
+      },
+    },
+
+    /* ---------- memory trainer (digit span) ---------- */
+    memory: {
+      label: 'Memory Trainer',
+      defaults: { w: 280, h: 220, config: { best: 0 } },
+      render(body, w) {
+        const m = w._mem || (w._mem = { state: 'idle', len: 3, seq: [] });
+        if (m.timer) { clearTimeout(m.timer); m.timer = null; }
+        const best = w.config.best || 0;
+        let mid = '';
+        if (m.state === 'idle') mid = `<div class="wg-mem-hint">Watch the number, then type it back.</div><button class="wg-btn wg-mem-start">▶ Start</button>`;
+        else if (m.state === 'show') mid = `<div class="wg-mem-seq">${m.seq.join(' ')}</div>`;
+        else if (m.state === 'input') mid = `<input class="wg-mem-input" inputmode="numeric" autocomplete="off" placeholder="type the number" /><button class="wg-btn wg-mem-go">Check</button>`;
+        else if (m.state === 'good') mid = `<div class="wg-mem-msg ok">✓ Correct!</div>`;
+        else if (m.state === 'over') mid = `<div class="wg-mem-msg bad">✗ It was ${m.seq.join(' ')}</div><button class="wg-btn wg-mem-start">↻ Try again</button>`;
+        body.innerHTML = `
+          <div class="wg-mem">
+            <div class="wg-mem-head"><span>🧩 Memory</span><span>length ${m.len} · best ${best}</span></div>
+            <div class="wg-mem-mid">${mid}</div>
+          </div>`;
+        const stop = (e2) => e2 && e2.addEventListener('pointerdown', (e) => e.stopPropagation());
+        const startBtn = body.querySelector('.wg-mem-start');
+        if (startBtn) { stop(startBtn); startBtn.onclick = (e) => { e.stopPropagation(); this.begin(body, w); }; }
+        const inp = body.querySelector('.wg-mem-input');
+        const goBtn = body.querySelector('.wg-mem-go');
+        if (inp) { stop(inp); inp.focus(); inp.onkeydown = (e) => { if (e.key === 'Enter') this.check(body, w, inp.value); }; }
+        if (goBtn) { stop(goBtn); goBtn.onclick = (e) => { e.stopPropagation(); this.check(body, w, inp.value); }; }
+        if (m.state === 'show') {
+          m.timer = setTimeout(() => { if (!body.isConnected) return; m.state = 'input'; this.render(body, w); }, 700 * m.len + 600);
+        } else if (m.state === 'good') {
+          m.timer = setTimeout(() => { if (!body.isConnected) return; this.next(body, w); }, 800);
+        }
+      },
+      begin(body, w) { w._mem.len = 3; this.next(body, w); },
+      next(body, w) {
+        const m = w._mem;
+        m.seq = Array.from({ length: m.len }, () => Math.floor(Math.random() * 10));
+        m.state = 'show';
+        this.render(body, w);
+      },
+      check(body, w, val) {
+        const m = w._mem;
+        if ((val || '').replace(/\D/g, '') === m.seq.join('')) {
+          w.config.best = Math.max(w.config.best || 0, m.len);
+          wapi.put(w.id, { config: w.config });
+          m.len++;
+          m.state = 'good';
+        } else {
+          m.state = 'over';
+        }
+        this.render(body, w);
+      },
+    },
+
+    /* ---------- habit streaks ---------- */
+    habits: {
+      label: 'Habits',
+      defaults: { w: 300, h: 250, config: { items: [] } },
+      render(body, w) {
+        const today = ymd(new Date());
+        body.dataset.d = new Date().toDateString();
+        const items = w.config.items || (w.config.items = []);
+        body.innerHTML = `
+          <div class="wg-hab">
+            <div class="wg-hab-head"><span>🔥 Habits</span>${EDITABLE ? '<button class="wg-hab-add" title="Add habit">＋</button>' : ''}</div>
+            <form class="wg-hab-form" hidden><input class="wg-hab-name" placeholder="New habit…" maxlength="40" /><button class="wg-btn" type="submit">Add</button></form>
+            <div class="wg-hab-list">${items.length ? '' : '<span class="muted small">No habits yet — hit ＋ to add one.</span>'}</div>
+          </div>`;
+        const list = body.querySelector('.wg-hab-list');
+        const stop = (e2) => e2 && e2.addEventListener('pointerdown', (e) => e.stopPropagation());
+        items.forEach((it) => {
+          const done = it.lastDone === today;
+          const row = document.createElement('div');
+          row.className = 'wg-hab-row';
+          row.innerHTML = `<input type="checkbox" ${done ? 'checked' : ''}/><span class="wg-hab-name-txt ${done ? 'done' : ''}">${escw(it.name)}</span><span class="wg-hab-streak">${it.streak ? '🔥 ' + it.streak : ''}</span>${EDITABLE ? '<button class="wg-hab-del" title="Remove">✕</button>' : ''}`;
+          const cb = row.querySelector('input'); stop(cb);
+          cb.onclick = (e) => { e.stopPropagation(); this.toggle(w, it); this.render(body, w); };
+          const del = row.querySelector('.wg-hab-del');
+          if (del) { stop(del); del.onclick = (e) => { e.stopPropagation(); w.config.items = items.filter((x) => x !== it); wapi.put(w.id, { config: w.config }); this.render(body, w); }; }
+          list.appendChild(row);
+        });
+        const addBtn = body.querySelector('.wg-hab-add');
+        const form = body.querySelector('.wg-hab-form');
+        if (addBtn && form) {
+          stop(addBtn); stop(form.querySelector('input'));
+          addBtn.onclick = (e) => { e.stopPropagation(); form.hidden = !form.hidden; if (!form.hidden) form.querySelector('input').focus(); };
+          form.onsubmit = (e) => {
+            e.preventDefault();
+            const name = form.querySelector('input').value.trim();
+            if (!name) return;
+            items.push({ id: Math.random().toString(36).slice(2, 8), name, lastDone: null, streak: 0, prevDone: null, prevStreak: 0 });
+            wapi.put(w.id, { config: w.config });
+            form.querySelector('input').value = '';
+            form.hidden = true;
+            this.render(body, w);
+          };
+        }
+      },
+      toggle(w, it) {
+        const today = ymd(new Date());
+        if (it.lastDone === today) {
+          it.lastDone = it.prevDone ?? null;
+          it.streak = it.prevStreak ?? 0;
+        } else {
+          const y = new Date(); y.setDate(y.getDate() - 1);
+          it.prevDone = it.lastDone ?? null;
+          it.prevStreak = it.streak || 0;
+          it.streak = (it.lastDone === ymd(y)) ? (it.streak || 0) + 1 : 1;
+          it.lastDone = today;
+        }
+        wapi.put(w.id, { config: w.config });
+      },
+      tick(body, w) {
+        if (body.dataset.d && body.dataset.d !== new Date().toDateString()) this.render(body, w);
       },
     },
   };

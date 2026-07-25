@@ -30,6 +30,17 @@ Raspberry Pi, a home-lab Docker host, or your laptop.
 - 🌤 **Weather** — Open-Meteo powered (no API key needed), city search, °F/°C
 - ⏰ **Reminders** — quick standalone reminders with once/hourly/daily/weekly
   recurrence
+- 📖 **Word of the Day** — a built-in vocabulary set with definitions and
+  examples; a new word daily, mark words as learned
+- 🎴 **Flashcards** — language decks (Spanish, French, German, Italian,
+  Japanese) with tap-to-flip and shuffle
+- 🍅 **Pomodoro** — focus/break cycles with a progress ring, daily session
+  count, and Telegram alerts on each phase change
+- 🧩 **Memory Trainer** — a digit-span brain-training game that grows with you
+  and tracks your best score
+- 🔥 **Habits** — daily habit checklist with automatic streak counting
+
+![Learning & productivity widgets](design/widgets-learning.png)
 
 **Reminders & Telegram**
 - Attach reminders to notes (date, time, frequency) or create standalone ones

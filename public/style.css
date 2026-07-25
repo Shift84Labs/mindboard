@@ -827,6 +827,115 @@ body.display-page .note-card:hover { transform: none; box-shadow: none; }
 .wg-rem-del { background: transparent; border: none; color: var(--muted); font-size: 12px; }
 .wg-rem-del:hover { color: var(--danger); }
 
+/* ============ learning / productivity widgets ============ */
+.wg-btn {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 6px 11px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.wg-btn:hover { border-color: var(--accent); }
+
+/* word of the day */
+.wg-wotd { padding: 12px 14px; height: 100%; display: flex; flex-direction: column; }
+.wg-wotd-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.wg-wotd-word { font-size: 9cqmin; font-weight: 600; }
+.wg-wotd-pos { font-size: 5.5cqmin; color: var(--muted); font-style: italic; }
+.wg-wotd-def { font-size: 6cqmin; margin-top: 5px; line-height: 1.4; }
+.wg-wotd-ex { font-size: 5.5cqmin; color: var(--muted); font-style: italic; margin-top: 6px; line-height: 1.35; }
+.wg-wotd-foot { margin-top: auto; display: flex; align-items: center; gap: 8px; padding-top: 10px; }
+.wg-wotd-count { font-size: 11px; color: var(--muted); margin-left: auto; }
+.wg-wotd-learned.on { border-color: var(--accent); background: var(--accent-dim); color: var(--accent); }
+
+/* flashcards */
+.wg-fc { padding: 12px 14px; height: 100%; display: flex; flex-direction: column; }
+.wg-fc-head { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); }
+.wg-fc-card {
+  flex: 1;
+  margin: 8px 0;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  cursor: pointer;
+  background: var(--panel-2);
+  padding: 8px;
+  transition: border-color 0.15s, background 0.15s;
+}
+.wg-fc-card.flipped { border-color: var(--accent); background: var(--accent-dim); }
+.wg-fc-face { font-size: 8cqmin; font-weight: 500; display: flex; flex-direction: column; gap: 4px; }
+.wg-fc-pron { font-size: 5cqmin; color: var(--muted); }
+.wg-fc-foot { display: flex; gap: 6px; }
+.wg-fc-foot .wg-btn { flex: 1; text-align: center; }
+
+/* pomodoro */
+.wg-pomo { position: relative; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.wg-pomo-ring { position: absolute; left: 8%; right: 8%; top: 6%; bottom: 14%; width: 84%; height: auto; }
+.wg-pomo.phase-work .ring-fg { stroke: var(--accent); }
+.wg-pomo.phase-brk .ring-fg { stroke: #60a5fa; }
+.wg-pomo.phase-long .ring-fg { stroke: #c084fc; }
+.wg-pomo-mid { position: relative; text-align: center; z-index: 2; }
+.wg-pomo-phase { font-size: 6cqmin; color: var(--muted); }
+.wg-pomo-time { font-size: 17cqmin; font-weight: 300; letter-spacing: -1px; line-height: 1.1; }
+.wg-pomo-btns { display: flex; gap: 6px; justify-content: center; margin-top: 4px; }
+.wg-pomo-btns button {
+  background: var(--accent-dim);
+  color: var(--accent);
+  border: none;
+  border-radius: 50%;
+  width: 10cqmin;
+  height: 10cqmin;
+  min-width: 28px;
+  min-height: 28px;
+  font-size: 5cqmin;
+}
+.wg-pomo-foot { position: absolute; bottom: 4%; font-size: 5cqmin; color: var(--muted); z-index: 2; }
+
+/* memory trainer */
+.wg-mem { padding: 12px 14px; height: 100%; display: flex; flex-direction: column; }
+.wg-mem-head { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); }
+.wg-mem-mid { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; text-align: center; }
+.wg-mem-hint { font-size: 5.5cqmin; color: var(--muted); line-height: 1.4; }
+.wg-mem-seq { font-size: 15cqmin; font-weight: 300; letter-spacing: 6px; }
+.wg-mem-input {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 9px 12px;
+  font-size: 16px;
+  text-align: center;
+  width: 82%;
+  letter-spacing: 4px;
+  outline: none;
+}
+.wg-mem-input:focus { border-color: var(--accent); }
+.wg-mem-msg { font-size: 8cqmin; font-weight: 500; }
+.wg-mem-msg.ok { color: var(--accent); }
+.wg-mem-msg.bad { color: var(--danger); }
+
+/* habits */
+.wg-hab { padding: 12px 14px; height: 100%; display: flex; flex-direction: column; }
+.wg-hab-head { display: flex; justify-content: space-between; align-items: center; font-size: 13px; font-weight: 600; margin-bottom: 8px; }
+.wg-hab-add { background: var(--accent-dim); color: var(--accent); border: none; border-radius: 50%; width: 24px; height: 24px; font-size: 14px; }
+.wg-hab-form { display: flex; gap: 6px; margin-bottom: 8px; }
+.wg-hab-form[hidden] { display: none; }
+.wg-hab-name { flex: 1; background: var(--panel-2); border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 6px 8px; font-size: 13px; outline: none; }
+.wg-hab-name:focus { border-color: var(--accent); }
+.wg-hab-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
+.wg-hab-row { display: flex; align-items: center; gap: 8px; background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; }
+.wg-hab-row input[type='checkbox'] { accent-color: var(--accent); width: 16px; height: 16px; cursor: pointer; flex-shrink: 0; }
+.wg-hab-name-txt { flex: 1; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wg-hab-name-txt.done { color: var(--muted); text-decoration: line-through; }
+.wg-hab-streak { font-size: 12px; color: #fb923c; white-space: nowrap; }
+.wg-hab-del { background: transparent; border: none; color: var(--muted); font-size: 12px; }
+.wg-hab-del:hover { color: var(--danger); }
+
 /* ---- timer name ---- */
 .wg-timer-name {
   position: absolute;
