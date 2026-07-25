@@ -936,6 +936,70 @@ body.display-page .note-card:hover { transform: none; box-shadow: none; }
 .wg-hab-del { background: transparent; border: none; color: var(--muted); font-size: 12px; }
 .wg-hab-del:hover { color: var(--danger); }
 
+/* hydration */
+.wg-water { padding: 12px 14px; height: 100%; display: flex; flex-direction: column; gap: 8px; }
+.wg-water-head { display: flex; justify-content: space-between; font-size: 13px; font-weight: 600; }
+.wg-water-cups { flex: 1; display: flex; flex-wrap: wrap; gap: 5px; align-content: center; justify-content: center; cursor: pointer; }
+.wg-water-cup { width: 16px; height: 22px; border-radius: 3px 3px 7px 7px; border: 1px solid var(--border); background: var(--panel-2); }
+.wg-water-cup.full { background: #3b82f6; border-color: #3b82f6; }
+.wg-water-add { align-self: center; }
+.wg-water-sub { font-size: 10.5px; color: var(--muted); text-align: center; }
+
+/* quiz */
+.wg-quiz { padding: 12px 14px; height: 100%; display: flex; flex-direction: column; }
+.wg-quiz-head { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); margin-bottom: 6px; }
+.wg-quiz-q { font-size: 6.5cqmin; font-weight: 500; line-height: 1.35; }
+.wg-quiz-a { font-size: 6cqmin; color: var(--accent); line-height: 1.4; margin-top: 8px; }
+.wg-quiz-a[hidden] { display: none; }
+.wg-quiz-foot { margin-top: auto; display: flex; gap: 6px; padding-top: 10px; }
+.wg-quiz-foot .wg-btn { flex: 1; text-align: center; }
+
+/* countdown */
+.wg-cd { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 2px; }
+.wg-cd-label { font-size: 6cqmin; color: var(--muted); }
+.wg-cd-main { display: flex; align-items: baseline; gap: 6px; }
+.wg-cd-days { font-size: 26cqmin; font-weight: 300; letter-spacing: -1px; }
+.wg-cd-dl { font-size: 7cqmin; color: var(--muted); }
+.wg-cd-sub { font-size: 6cqmin; color: var(--muted); }
+
+/* breathing */
+.wg-br { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; }
+.wg-br-circle {
+  width: 45cqmin; height: 45cqmin;
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 35%, var(--accent-dim), rgba(74,222,128,0.05));
+  border: 2px solid var(--accent);
+  display: flex; align-items: center; justify-content: center;
+  transform: scale(0.7);
+  transition: transform 4s linear;
+}
+.wg-br-count { font-size: 12cqmin; font-weight: 300; color: var(--accent); }
+.wg-br-phase { font-size: 6cqmin; color: var(--muted); }
+
+/* quote */
+.wg-quote { padding: 14px 16px; height: 100%; display: flex; flex-direction: column; }
+.wg-quote-t { font-size: 6.5cqmin; font-style: italic; line-height: 1.4; }
+.wg-quote-a { font-size: 5.5cqmin; color: var(--muted); margin-top: 8px; }
+.wg-quote-new { align-self: flex-start; margin-top: auto; }
+
+/* dice & coin */
+.wg-dice { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; }
+.wg-dice-result { font-size: 20cqmin; font-weight: 400; }
+.wg-dice-result.pop { animation: dicePop 0.25s ease; }
+@keyframes dicePop { 0% { transform: scale(0.6); opacity: 0.4; } 100% { transform: scale(1); opacity: 1; } }
+.wg-dice-label { font-size: 5.5cqmin; color: var(--muted); }
+.wg-dice-btns { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; justify-content: center; }
+
+/* base converter */
+.wg-base { padding: 12px 14px; height: 100%; display: flex; flex-direction: column; gap: 8px; }
+.wg-base-head { font-size: 13px; font-weight: 600; }
+.wg-base-in { background: var(--panel-2); border: 1px solid var(--border); color: var(--text); border-radius: 8px; padding: 9px 12px; font-size: 16px; outline: none; }
+.wg-base-in:focus { border-color: var(--accent); }
+.wg-base-out { display: flex; flex-direction: column; gap: 5px; }
+.wg-base-out div { display: flex; justify-content: space-between; align-items: baseline; font-size: 12px; }
+.wg-base-out span { color: var(--muted); letter-spacing: 1px; }
+.wg-base-out b { font-family: 'Roboto Mono', monospace; font-weight: 500; word-break: break-all; text-align: right; margin-left: 8px; }
+
 /* ---- timer name ---- */
 .wg-timer-name {
   position: absolute;

@@ -39,8 +39,19 @@ Raspberry Pi, a home-lab Docker host, or your laptop.
 - 🧩 **Memory Trainer** — a digit-span brain-training game that grows with you
   and tracks your best score
 - 🔥 **Habits** — daily habit checklist with automatic streak counting
+- 💧 **Hydration** — tap to log a cup of water; nudges you via Telegram after
+  2 hours idle (only 7am–11pm)
+- 💻 🔌 ➗ ⚡ 🖥️ **Knowledge quizzes** — flip-to-reveal Q&A decks for
+  Programming, Computer Engineering, Mathematics, Electrical Engineering, and
+  Computer Science
+- ⏳ **Countdown** — live days/hours/minutes to any event you set
+- 🌬️ **Breathing** — animated box-breathing coach for a quick focus reset
+- 💭 **Quote** — a daily dose of motivation
+- 🎲 **Dice & Coin** — quick d6/d20 roller and coin flip
+- 🔢 **Base Converter** — decimal ↔ hex / binary / octal, handy for dev work
 
 ![Learning & productivity widgets](design/widgets-learning.png)
+![More widgets — hydration, quizzes, tools](design/widgets-learning-2.png)
 
 **Reminders & Telegram**
 - Attach reminders to notes (date, time, frequency) or create standalone ones

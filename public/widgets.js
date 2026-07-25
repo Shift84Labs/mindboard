@@ -141,6 +141,122 @@
     ] },
   };
 
+  const QUOTES = [
+    { t: 'The secret of getting ahead is getting started.', a: 'Mark Twain' },
+    { t: 'It always seems impossible until it’s done.', a: 'Nelson Mandela' },
+    { t: 'Simplicity is the soul of efficiency.', a: 'Austin Freeman' },
+    { t: 'The only way to learn a new programming language is by writing programs in it.', a: 'Dennis Ritchie' },
+    { t: 'Premature optimization is the root of all evil.', a: 'Donald Knuth' },
+    { t: 'Talk is cheap. Show me the code.', a: 'Linus Torvalds' },
+    { t: 'Whether you think you can, or you think you can’t — you’re right.', a: 'Henry Ford' },
+    { t: 'Discipline is choosing between what you want now and what you want most.', a: 'Abraham Lincoln' },
+    { t: 'We suffer more often in imagination than in reality.', a: 'Seneca' },
+    { t: 'The impediment to action advances action. What stands in the way becomes the way.', a: 'Marcus Aurelius' },
+    { t: 'Knowledge is of no value unless you put it into practice.', a: 'Anton Chekhov' },
+    { t: 'Success is the sum of small efforts repeated day in and day out.', a: 'Robert Collier' },
+    { t: 'First, solve the problem. Then, write the code.', a: 'John Johnson' },
+    { t: 'The best way to predict the future is to invent it.', a: 'Alan Kay' },
+    { t: 'An investment in knowledge pays the best interest.', a: 'Benjamin Franklin' },
+  ];
+
+  const QUIZ = {
+    prog: [
+      { q: 'What is the time complexity of binary search?', a: 'O(log n) — it halves the search space each step.' },
+      { q: 'What does "idempotent" mean for an API endpoint?', a: 'Calling it multiple times has the same effect as calling it once (e.g. PUT, DELETE).' },
+      { q: 'Difference between a process and a thread?', a: 'Processes have isolated memory; threads share the process memory and are lighter to create.' },
+      { q: 'What is a race condition?', a: 'A bug where the result depends on the non-deterministic timing of concurrent operations.' },
+      { q: 'What is a pure function?', a: 'A function with no side effects whose output depends only on its inputs.' },
+      { q: 'What does ACID stand for in databases?', a: 'Atomicity, Consistency, Isolation, Durability.' },
+      { q: 'What is the CAP theorem?', a: 'A distributed store can guarantee at most two of Consistency, Availability, Partition-tolerance.' },
+      { q: 'What is dependency injection?', a: 'Supplying an object’s dependencies from outside rather than constructing them internally.' },
+      { q: 'Compiled vs interpreted language?', a: 'Compiled is translated to machine code ahead of time; interpreted is executed by a runtime at run time.' },
+      { q: 'What is a memory leak?', a: 'Memory that is no longer needed but never freed, so usage grows over time.' },
+    ],
+    compeng: [
+      { q: 'What is pipelining in a CPU?', a: 'Overlapping instruction stages (fetch, decode, execute…) so several are in flight at once.' },
+      { q: 'What is a cache miss?', a: 'When requested data isn’t in the cache and must be fetched from slower memory.' },
+      { q: 'Describe the memory hierarchy.', a: 'Registers → L1/L2/L3 cache → RAM → disk, trading speed for capacity going down.' },
+      { q: 'What does a branch predictor do?', a: 'Guesses a branch’s outcome to keep the pipeline full; a misprediction causes a flush.' },
+      { q: 'What is DMA?', a: 'Direct Memory Access — devices move data to/from RAM without the CPU handling each byte.' },
+      { q: 'RISC vs CISC?', a: 'RISC: many simple fixed-length instructions. CISC: fewer complex variable-length ones.' },
+      { q: 'What is virtual memory?', a: 'A per-process abstraction of a large contiguous address space, mapped to RAM + disk via paging.' },
+      { q: 'What is an interrupt?', a: 'A signal that pauses the CPU to handle an event, saving state and jumping to a handler.' },
+      { q: 'What is endianness?', a: 'Byte order of multi-byte values — big-endian stores the most-significant byte first, little-endian last.' },
+      { q: 'What is a pipeline hazard?', a: 'A data, control, or structural conflict that stops the next instruction running in its slot.' },
+    ],
+    math: [
+      { q: 'What is the derivative of sin(x)?', a: 'cos(x).' },
+      { q: 'State the Pythagorean theorem.', a: 'In a right triangle, a² + b² = c², where c is the hypotenuse.' },
+      { q: 'What is Euler’s identity?', a: 'e^(iπ) + 1 = 0.' },
+      { q: 'What is the integral of 1/x?', a: 'ln|x| + C.' },
+      { q: 'What does a matrix determinant of 0 mean?', a: 'The matrix is singular — non-invertible; the linear map collapses volume.' },
+      { q: 'State Bayes’ theorem.', a: 'P(A|B) = P(B|A)·P(A) / P(B).' },
+      { q: 'Sum of the first n integers?', a: 'n(n + 1) / 2.' },
+      { q: 'What is an eigenvector?', a: 'A nonzero vector that only scales (not rotates) under a linear map; its factor is the eigenvalue.' },
+      { q: 'Geometric meaning of the dot product?', a: '|a||b|cos(θ) — how much two vectors point the same way.' },
+      { q: 'What is a limit?', a: 'The value a function approaches as its input approaches a given point.' },
+    ],
+    ee: [
+      { q: 'State Ohm’s law.', a: 'V = I·R (voltage = current × resistance).' },
+      { q: 'What is Kirchhoff’s current law?', a: 'Current into a node equals current out of it (charge is conserved).' },
+      { q: 'What does a capacitor do?', a: 'Stores energy in an electric field, resists voltage change; blocks DC, passes AC.' },
+      { q: 'What does an inductor do?', a: 'Stores energy in a magnetic field, resists current change; passes DC, impedes AC.' },
+      { q: 'What is impedance?', a: 'AC resistance including reactance: Z = R + jX (complex, frequency-dependent).' },
+      { q: 'Define RMS voltage.', a: 'The equivalent DC voltage delivering equal power; for a sine wave, Vpeak/√2.' },
+      { q: 'What is the RC time constant?', a: 'τ = R·C — time to charge/discharge to ~63% of the final value.' },
+      { q: 'What is a diode?', a: 'A component that lets current flow in only one direction.' },
+      { q: 'AC vs DC?', a: 'DC flows one constant direction; AC periodically reverses direction.' },
+      { q: 'What is a decibel (power)?', a: 'A log ratio: dB = 10·log₁₀(P₁/P₂).' },
+    ],
+    cs: [
+      { q: 'Average hash-table lookup time?', a: 'O(1) amortized, with a good hash and low load factor.' },
+      { q: 'Big-O of quicksort?', a: 'O(n log n) average, O(n²) worst case.' },
+      { q: 'What is a deadlock?', a: 'Processes each waiting for resources the others hold, so none can proceed.' },
+      { q: 'Stack vs queue?', a: 'Stack is LIFO (last-in-first-out); queue is FIFO (first-in-first-out).' },
+      { q: 'What is P vs NP?', a: 'Whether every problem verifiable quickly (NP) can also be solved quickly (P). Still open.' },
+      { q: 'What is dynamic programming?', a: 'Solving overlapping subproblems once and reusing results (memoization/tabulation).' },
+      { q: 'What is BFS good for?', a: 'Level-by-level graph traversal; finds shortest paths in unweighted graphs.' },
+      { q: 'Array index access time?', a: 'O(1) — constant time.' },
+      { q: 'What does DRY mean?', a: 'Don’t Repeat Yourself — avoid duplicating logic.' },
+      { q: 'What is recursion?', a: 'A function calling itself on smaller subproblems down to a base case.' },
+    ],
+  };
+
+  // factory: builds a self-contained "flip to reveal" quiz widget for a topic bank
+  function quizType(key, label, emoji) {
+    const t = {
+      label,
+      defaults: { w: 320, h: 220, config: {} },
+      render(body, w) {
+        const bank = QUIZ[key];
+        if (!w._q) w._q = { order: shuffle([...bank.keys()]), pos: 0, show: false };
+        const st = w._q;
+        const item = bank[st.order[st.pos]];
+        body.innerHTML = `
+          <div class="wg-quiz">
+            <div class="wg-quiz-head"><span>${emoji} ${escw(label)}</span><span>${st.pos + 1}/${bank.length}</span></div>
+            <div class="wg-quiz-q">${escw(item.q)}</div>
+            <div class="wg-quiz-a"${st.show ? '' : ' hidden'}>${escw(item.a)}</div>
+            <div class="wg-quiz-foot">
+              <button class="wg-btn wg-quiz-reveal">${st.show ? 'Hide' : 'Reveal'}</button>
+              <button class="wg-btn wg-quiz-next">Next ›</button>
+            </div>
+          </div>`;
+        const stop = (e2) => e2 && e2.addEventListener('pointerdown', (e) => e.stopPropagation());
+        const rev = body.querySelector('.wg-quiz-reveal'); stop(rev);
+        rev.onclick = (e) => { e.stopPropagation(); st.show = !st.show; t.render(body, w); };
+        const nx = body.querySelector('.wg-quiz-next'); stop(nx);
+        nx.onclick = (e) => {
+          e.stopPropagation();
+          st.show = false; st.pos++;
+          if (st.pos >= bank.length) { st.pos = 0; st.order = shuffle([...bank.keys()]); }
+          t.render(body, w);
+        };
+      },
+    };
+    return t;
+  }
+
   const TYPES = {
     /* ---------- clock ---------- */
     clock: {
@@ -878,6 +994,225 @@
       },
       tick(body, w) {
         if (body.dataset.d && body.dataset.d !== new Date().toDateString()) this.render(body, w);
+      },
+    },
+
+    /* ---------- hydration (drink water) ---------- */
+    water: {
+      label: 'Hydration',
+      defaults: { w: 260, h: 200, config: { cups: 0, goal: 8, date: null, lastDrink: null, lastReminded: null, startHour: 7, endHour: 23 } },
+      render(body, w) {
+        const today = new Date().toDateString();
+        if (w.config.date !== today) { w.config.date = today; w.config.cups = 0; w.config.lastDrink = null; w.config.lastReminded = null; }
+        body.dataset.d = today;
+        const cups = w.config.cups || 0, goal = w.config.goal || 8;
+        let icons = '';
+        for (let i = 0; i < goal; i++) icons += `<span class="wg-water-cup ${i < cups ? 'full' : ''}"></span>`;
+        body.innerHTML = `
+          <div class="wg-water">
+            <div class="wg-water-head"><span>💧 Hydration</span><span>${cups}/${goal}</span></div>
+            <div class="wg-water-cups">${icons}</div>
+            <button class="wg-btn wg-water-add">＋ Drank a cup</button>
+            <div class="wg-water-sub">${cups >= goal ? '🎉 Goal reached — nice!' : 'Nudges 7am–11pm every 2h idle'}</div>
+          </div>`;
+        const stop = (e2) => e2 && e2.addEventListener('pointerdown', (e) => e.stopPropagation());
+        const add = () => {
+          const t2 = new Date().toDateString();
+          if (w.config.date !== t2) { w.config.date = t2; w.config.cups = 0; }
+          w.config.cups = (w.config.cups || 0) + 1;
+          w.config.lastDrink = new Date().toISOString();
+          w.config.lastReminded = null;
+          wapi.put(w.id, { config: w.config });
+          this.render(body, w);
+        };
+        const btn = body.querySelector('.wg-water-add'); stop(btn); btn.onclick = (e) => { e.stopPropagation(); add(); };
+        const cupsEl = body.querySelector('.wg-water-cups'); stop(cupsEl); cupsEl.onclick = (e) => { e.stopPropagation(); add(); };
+      },
+      tick(body, w) {
+        if (body.dataset.d && body.dataset.d !== new Date().toDateString()) this.render(body, w);
+      },
+      configUI(wrap, w, save) {
+        wrap.innerHTML = `<span class="edit-label">Daily goal (cups)</span>
+          <div class="cfg-row"><input id="wgGoal" type="number" min="1" max="20" value="${w.config.goal || 8}" class="note-title-input" style="margin:0;width:100px"/></div>`;
+        el('wgGoal').onchange = (e) => { w.config.goal = Math.max(1, Math.min(20, +e.target.value || 8)); save(); };
+      },
+    },
+
+    /* ---------- knowledge quizzes ---------- */
+    quizProg: quizType('prog', 'Programming', '💻'),
+    quizCompEng: quizType('compeng', 'Computer Eng', '🔌'),
+    quizMath: quizType('math', 'Mathematics', '➗'),
+    quizEE: quizType('ee', 'Electrical Eng', '⚡'),
+    quizCS: quizType('cs', 'Computer Science', '🖥️'),
+
+    /* ---------- countdown ---------- */
+    countdown: {
+      label: 'Countdown',
+      defaults: { w: 260, h: 180, config: { label: 'New Year', target: null } },
+      render(body, w) {
+        body.innerHTML = `
+          <div class="wg-cd">
+            <div class="wg-cd-label">${escw(w.config.label || 'Countdown')}</div>
+            <div class="wg-cd-main"></div>
+            <div class="wg-cd-sub"></div>
+          </div>`;
+        this.tick(body, w);
+      },
+      targetTime(w) {
+        if (w.config.target) return new Date(w.config.target).getTime();
+        return new Date(new Date().getFullYear() + 1, 0, 1).getTime();
+      },
+      tick(body, w) {
+        const main = body.querySelector('.wg-cd-main'); if (!main) return;
+        const sub = body.querySelector('.wg-cd-sub');
+        const diff = this.targetTime(w) - Date.now();
+        if (diff <= 0) { main.innerHTML = '<span class="wg-cd-days">🎉</span>'; if (sub) sub.textContent = 'The day is here!'; return; }
+        const d = Math.floor(diff / 864e5), h = Math.floor((diff % 864e5) / 36e5), m = Math.floor((diff % 36e5) / 6e4), s = Math.floor((diff % 6e4) / 1e3);
+        main.innerHTML = `<span class="wg-cd-days">${d}</span><span class="wg-cd-dl">days</span>`;
+        if (sub) sub.textContent = `${String(h).padStart(2, '0')}h ${String(m).padStart(2, '0')}m ${String(s).padStart(2, '0')}s`;
+      },
+      configUI(wrap, w, save) {
+        const cur = w.config.target ? new Date(w.config.target) : null;
+        const pad = (v) => String(v).padStart(2, '0');
+        const val = cur ? `${cur.getFullYear()}-${pad(cur.getMonth() + 1)}-${pad(cur.getDate())}T${pad(cur.getHours())}:${pad(cur.getMinutes())}` : '';
+        wrap.innerHTML = `<span class="edit-label">Event name</span>
+          <div class="cfg-row"><input id="cdLabel" class="note-title-input" style="margin:0" value="${escw(w.config.label || '')}"/></div>
+          <span class="edit-label">Target date &amp; time</span>
+          <div class="cfg-row"><input id="cdDate" type="datetime-local" class="reminder-input" value="${val}"/></div>`;
+        el('cdLabel').onchange = (e) => { w.config.label = e.target.value.trim() || 'Countdown'; save(); };
+        el('cdDate').onchange = (e) => { w.config.target = e.target.value ? new Date(e.target.value).toISOString() : null; save(); };
+      },
+    },
+
+    /* ---------- breathing coach ---------- */
+    breathing: {
+      label: 'Breathing',
+      defaults: { w: 240, h: 240, config: {} },
+      render(body, w) {
+        if (!w._br) w._br = { running: false, sec: 0 };
+        body.innerHTML = `
+          <div class="wg-br">
+            <div class="wg-br-circle"><span class="wg-br-count"></span></div>
+            <div class="wg-br-phase">Box breathing · 4-4-4-4</div>
+            <button class="wg-btn wg-br-toggle">▶ Start</button>
+          </div>`;
+        const btn = body.querySelector('.wg-br-toggle');
+        btn.addEventListener('pointerdown', (e) => e.stopPropagation());
+        btn.onclick = (e) => { e.stopPropagation(); w._br.running = !w._br.running; w._br.sec = 0; this.paint(body, w, true); };
+        this.paint(body, w, true);
+      },
+      paint(body, w, boundary) {
+        const br = w._br; const circle = body.querySelector('.wg-br-circle'); if (!circle) return;
+        const phases = ['Inhale', 'Hold', 'Exhale', 'Hold'];
+        const phase = Math.floor((br.sec % 16) / 4);
+        const countEl = body.querySelector('.wg-br-count'), phaseEl = body.querySelector('.wg-br-phase'), btn = body.querySelector('.wg-br-toggle');
+        if (btn) btn.textContent = br.running ? '⏸ Pause' : '▶ Start';
+        if (!br.running) { circle.style.transform = 'scale(0.7)'; if (countEl) countEl.textContent = ''; if (phaseEl) phaseEl.textContent = 'Box breathing · 4-4-4-4'; return; }
+        if (phaseEl) phaseEl.textContent = phases[phase];
+        if (countEl) countEl.textContent = 4 - (br.sec % 4);
+        if (boundary || br.sec % 4 === 0) {
+          if (phase === 0) circle.style.transform = 'scale(1)';
+          else if (phase === 2) circle.style.transform = 'scale(0.6)';
+        }
+      },
+      tick(body, w) {
+        const br = w._br; if (!br || !br.running) return;
+        br.sec++;
+        this.paint(body, w, false);
+      },
+    },
+
+    /* ---------- quote of the day ---------- */
+    quote: {
+      label: 'Quote',
+      defaults: { w: 320, h: 180, config: { pick: null, day: null } },
+      render(body, w) {
+        const today = new Date().toDateString();
+        body.dataset.d = today;
+        let idx = (w.config.pick != null && w.config.day === today) ? w.config.pick : dayIndex(QUOTES.length);
+        idx = ((idx % QUOTES.length) + QUOTES.length) % QUOTES.length;
+        const q = QUOTES[idx];
+        body.innerHTML = `
+          <div class="wg-quote">
+            <div class="wg-quote-t">&ldquo;${escw(q.t)}&rdquo;</div>
+            <div class="wg-quote-a">— ${escw(q.a)}</div>
+            <button class="wg-btn wg-quote-new">↻ New</button>
+          </div>`;
+        const b = body.querySelector('.wg-quote-new');
+        b.addEventListener('pointerdown', (e) => e.stopPropagation());
+        b.onclick = (e) => {
+          e.stopPropagation();
+          let n; do { n = Math.floor(Math.random() * QUOTES.length); } while (n === idx && QUOTES.length > 1);
+          w.config.pick = n; w.config.day = today;
+          wapi.put(w.id, { config: w.config });
+          this.render(body, w);
+        };
+      },
+      tick(body, w) {
+        if (body.dataset.d && body.dataset.d !== new Date().toDateString()) this.render(body, w);
+      },
+    },
+
+    /* ---------- dice & coin ---------- */
+    dice: {
+      label: 'Dice & Coin',
+      defaults: { w: 240, h: 200, config: {} },
+      render(body, w) {
+        if (!w._d) w._d = { result: '🎲', label: 'Tap a button' };
+        body.innerHTML = `
+          <div class="wg-dice">
+            <div class="wg-dice-result">${escw(w._d.result)}</div>
+            <div class="wg-dice-label">${escw(w._d.label)}</div>
+            <div class="wg-dice-btns">
+              <button class="wg-btn" data-roll="6">🎲 d6</button>
+              <button class="wg-btn" data-roll="20">🎲 d20</button>
+              <button class="wg-btn" data-coin="1">🪙 Coin</button>
+            </div>
+          </div>`;
+        body.querySelectorAll('.wg-dice-btns button').forEach((b) => {
+          b.addEventListener('pointerdown', (e) => e.stopPropagation());
+          b.onclick = (e) => {
+            e.stopPropagation();
+            if (b.dataset.roll) { const n = +b.dataset.roll; w._d = { result: '' + (1 + Math.floor(Math.random() * n)), label: 'd' + n }; }
+            else { w._d = { result: Math.random() < 0.5 ? 'Heads' : 'Tails', label: 'Coin flip' }; }
+            const res = body.querySelector('.wg-dice-result');
+            res.textContent = w._d.result;
+            res.classList.remove('pop'); void res.offsetWidth; res.classList.add('pop');
+            body.querySelector('.wg-dice-label').textContent = w._d.label;
+          };
+        });
+      },
+    },
+
+    /* ---------- base converter (dec / hex / bin / oct) ---------- */
+    baseconv: {
+      label: 'Base Converter',
+      defaults: { w: 280, h: 200, config: {} },
+      render(body, w) {
+        body.innerHTML = `
+          <div class="wg-base">
+            <div class="wg-base-head">🔢 Base Converter</div>
+            <input class="wg-base-in" inputmode="numeric" autocomplete="off" placeholder="decimal number" value="${w.config.last != null ? escw('' + w.config.last) : ''}"/>
+            <div class="wg-base-out">
+              <div><span>HEX</span><b class="wg-base-hex">—</b></div>
+              <div><span>BIN</span><b class="wg-base-bin">—</b></div>
+              <div><span>OCT</span><b class="wg-base-oct">—</b></div>
+            </div>
+          </div>`;
+        const inp = body.querySelector('.wg-base-in');
+        inp.addEventListener('pointerdown', (e) => e.stopPropagation());
+        const compute = () => {
+          const raw = inp.value.trim();
+          const n = parseInt(raw, 10);
+          const hex = body.querySelector('.wg-base-hex'), bin = body.querySelector('.wg-base-bin'), oct = body.querySelector('.wg-base-oct');
+          if (raw === '' || Number.isNaN(n)) { hex.textContent = bin.textContent = oct.textContent = '—'; return; }
+          hex.textContent = '0x' + Math.abs(n).toString(16).toUpperCase();
+          bin.textContent = '0b' + Math.abs(n).toString(2);
+          oct.textContent = '0o' + Math.abs(n).toString(8);
+        };
+        inp.oninput = compute;
+        inp.onchange = () => { const n = parseInt(inp.value, 10); if (!Number.isNaN(n)) { w.config.last = n; wapi.put(w.id, { config: w.config }); } };
+        compute();
       },
     },
   };

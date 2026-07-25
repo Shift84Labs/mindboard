@@ -389,6 +389,27 @@ async function checkReminders() {
       changed = true;
     }
   }
+  // hydration widgets: nudge every 2h of inactivity during the active window
+  const nowD = new Date();
+  const hr = nowD.getHours();
+  const TWO_H = 2 * 3600 * 1000;
+  for (const wdg of db.widgets) {
+    if (wdg.type !== 'water') continue;
+    const c = wdg.config || (wdg.config = {});
+    const today = nowD.toDateString();
+    if (c.date !== today) { c.date = today; c.cups = 0; c.lastDrink = null; c.lastReminded = null; changed = true; }
+    const startHour = c.startHour ?? 7, endHour = c.endHour ?? 23;
+    if (hr < startHour || hr >= endHour) continue;
+    if ((c.cups || 0) >= (c.goal || 8)) continue; // goal met — stop nagging
+    const windowStart = new Date(nowD); windowStart.setHours(startHour, 0, 0, 0);
+    const lastActivity = c.lastDrink ? new Date(c.lastDrink).getTime() : windowStart.getTime();
+    const lastRem = c.lastReminded ? new Date(c.lastReminded).getTime() : 0;
+    if (now - lastActivity >= TWO_H && now - lastRem >= TWO_H) {
+      await tgNotify(`💧 <b>Time to drink water!</b>\nYou've had ${c.cups || 0} of ${c.goal || 8} cups today.`);
+      c.lastReminded = new Date(now).toISOString();
+      changed = true;
+    }
+  }
   if (changed) saveDb(db);
 }
 setInterval(() => checkReminders().catch((e) => console.error('Reminder check error:', e.message)), 30 * 1000);
