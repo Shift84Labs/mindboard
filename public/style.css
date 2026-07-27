@@ -486,6 +486,9 @@ input, textarea, select { font-family: inherit; }
   position: relative;
   margin-bottom: 20px;
   transition: height 0.15s;
+  /* contain widget z-indexes so no widget can paint above modals, the
+     whiteboard overlay, or context menus no matter how high its z climbs */
+  isolation: isolate;
 }
 .widget-canvas.empty { display: none; }
 body.widget-edit .widget-canvas {
