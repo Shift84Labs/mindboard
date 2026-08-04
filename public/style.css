@@ -1046,6 +1046,37 @@ body.display-page .note-card:hover { transform: none; box-shadow: none; }
 .wg-pw-btns { display: flex; gap: 6px; margin-top: auto; }
 .wg-pw-btns .wg-btn { flex: 1; text-align: center; }
 
+/* AXIOM weekly schedule */
+.wg-wk { padding: 10px 12px; height: 100%; display: flex; flex-direction: column; }
+.wg-wk-head { display: flex; justify-content: space-between; align-items: baseline; font-size: 12px; font-weight: 600; }
+.wg-wk-focus { font-size: 10px; color: var(--accent); font-weight: 500; }
+.wg-wk-days { display: flex; gap: 4px; margin: 8px 0; }
+.wg-wk-day { flex: 1; background: var(--panel-2); border: 1px solid var(--border); color: var(--muted); border-radius: 6px; padding: 5px 0; font-size: 11px; cursor: pointer; }
+.wg-wk-day.today { border-color: var(--accent); color: var(--text); }
+.wg-wk-day.sel { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); font-weight: 700; }
+.wg-wk-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 3px; }
+.wg-wk-row { display: flex; align-items: center; gap: 8px; background: var(--panel-2); border: 1px solid var(--border); border-radius: 6px; padding: 5px 8px; cursor: pointer; }
+.wg-wk-row.active { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent-dim); }
+.wg-wk-row.done { opacity: 0.5; }
+.wg-wk-row.done .wg-wk-task b { text-decoration: line-through; }
+.wg-wk-row.custom { border-style: dashed; }
+.wg-wk-time { font-size: 10px; color: var(--muted); width: 34px; flex-shrink: 0; font-variant-numeric: tabular-nums; }
+.wg-wk-task { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.wg-wk-task b { font-size: 12px; font-weight: 600; }
+.wg-wk-task span { font-size: 10px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wg-wk-check { color: var(--accent); font-size: 12px; width: 12px; text-align: center; flex-shrink: 0; }
+.wg-wk-del { background: transparent; border: none; color: var(--muted); font-size: 11px; }
+.wg-wk-del:hover { color: var(--danger); }
+.wg-wk-add { margin-top: 6px; }
+.wg-wk-addbtn { width: 100%; text-align: center; }
+.wg-wk-addform { margin-top: 6px; display: flex; flex-direction: column; gap: 6px; }
+.wg-wk-addform[hidden] { display: none; }
+.wg-wk-input { background: var(--panel-2); border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 7px 9px; font-size: 14px; outline: none; }
+.wg-wk-input:focus { border-color: var(--accent); }
+.wg-wk-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.wg-wk-chip { background: var(--panel-2); border: 1px solid var(--border); color: var(--text); border-radius: 999px; padding: 3px 8px; font-size: 10.5px; cursor: pointer; }
+.wg-wk-chip:hover { border-color: var(--accent); }
+
 /* ---- timer name ---- */
 .wg-timer-name {
   position: absolute;

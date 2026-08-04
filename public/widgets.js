@@ -282,6 +282,24 @@
     return t;
   }
 
+  // AXIOM daily operating schedule (baked into the weekly calendar widget)
+  const AXIOM_SCHEDULE = [
+    { time: '9:00', title: 'Command Center', task: 'Set revenue, outreach, build & skill targets. Pick one must-do.' },
+    { time: '9:30', title: 'Client Growth', task: 'Check analytics, post a promo, contact 5 clients, log outreach.' },
+    { time: '11:00', title: 'Service Build', task: 'Build or improve one fixed-price AXIOM service package.' },
+    { time: '12:30', title: 'Lunch + Learning', learn: true },
+    { time: '1:00', title: 'CRM / Ticketing', task: 'Update client records, tickets, quotes, follow-ups, leads.' },
+    { time: '2:30', title: 'Business Admin', task: 'EIN, bank, Chamber, accounting, invoices, proposals, legal.' },
+    { time: '3:30', title: 'Build / Lab', build: true },
+    { time: '4:30', title: 'Daily Closeout', task: 'Log leads, replies, quotes, jobs, money, skill, tomorrow’s first task.' },
+  ];
+  // rotations, indexed Monday-first (0 = Mon … 6 = Sun)
+  const AXIOM_LEARN = ['Google Analytics / SEO', 'Sales & client calls', 'Docker / self-hosting', 'Pricing & proposals', 'Cybersecurity', 'Home lab / automation', 'Business planning'];
+  const AXIOM_BUILD = ['CRM/ticketing Docker stack', 'AXIOM website improvements', 'Client intake form + automation', 'Price sheet + proposal templates', 'Security audit checklist', 'Smart home / camera templates', 'Weekly review + next-week planning'];
+  const AXIOM_FOCUS = ['Money + Setup', 'Services + Pricing', 'Client Outreach', 'Build Tools', 'Sales + Follow-Up', 'Field Work', 'Review + Planning'];
+  const AXIOM_TASKS = ['Contact 5 clients', 'Post promotion', 'Send a quote', 'Follow up leads', 'Update CRM', 'Improve a skill', 'Track money', 'Set tomorrow task'];
+  function timeToMin(t) { const p = t.split(':'); let h = +p[0]; const m = +p[1] || 0; if (h < 8) h += 12; return h * 60 + m; }
+
   const TYPES = {
     /* ---------- clock ---------- */
     clock: {
@@ -1426,6 +1444,99 @@
           const t = out.textContent;
           if (t && t.length > 4) { try { await navigator.clipboard.writeText(t); out.title = 'copied ✓'; } catch {} }
         };
+      },
+    },
+
+    /* ---------- AXIOM weekly schedule ---------- */
+    weekcal: {
+      label: 'AXIOM Week',
+      defaults: { w: 360, h: 380, config: { done: {}, custom: {} } },
+      render(body, w) {
+        w._wkT = Date.now();
+        const now = new Date();
+        const todayIdx = (now.getDay() + 6) % 7; // Monday-first
+        if (w._sel == null) w._sel = todayIdx;
+        const monday = new Date(now); monday.setDate(now.getDate() - todayIdx); monday.setHours(0, 0, 0, 0);
+        const selDate = new Date(monday); selDate.setDate(monday.getDate() + w._sel);
+        const ds = ymd(selDate);
+        const chips = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+        const done = (w.config.done && w.config.done[ds]) || [];
+        const customs = (w.config.custom && w.config.custom[ds]) || [];
+        const nowMin = now.getHours() * 60 + now.getMinutes();
+        const isToday = w._sel === todayIdx;
+
+        body.innerHTML = `
+          <div class="wg-wk">
+            <div class="wg-wk-head"><span>📅 AXIOM Week</span><span class="wg-wk-focus">${escw(AXIOM_FOCUS[w._sel])}</span></div>
+            <div class="wg-wk-days">
+              ${chips.map((c, i) => `<button class="wg-wk-day ${i === w._sel ? 'sel' : ''} ${i === todayIdx ? 'today' : ''}" data-i="${i}">${c}</button>`).join('')}
+            </div>
+            <div class="wg-wk-list"></div>
+            <div class="wg-wk-add">
+              <button class="wg-btn wg-wk-addbtn">＋ Add task to ${['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][w._sel]}</button>
+              <div class="wg-wk-addform" hidden>
+                <input class="wg-wk-input" placeholder="Custom task…" maxlength="60"/>
+                <div class="wg-wk-chips">${AXIOM_TASKS.map((t) => `<button class="wg-wk-chip" data-t="${escw(t)}">${escw(t)}</button>`).join('')}</div>
+              </div>
+            </div>
+          </div>`;
+
+        const list = body.querySelector('.wg-wk-list');
+        AXIOM_SCHEDULE.forEach((blk, idx) => {
+          const detail = blk.learn ? AXIOM_LEARN[w._sel] : blk.build ? AXIOM_BUILD[w._sel] : blk.task;
+          const isDone = done.includes(idx);
+          const nextMin = idx + 1 < AXIOM_SCHEDULE.length ? timeToMin(AXIOM_SCHEDULE[idx + 1].time) : 17 * 60;
+          const active = isToday && nowMin >= timeToMin(blk.time) && nowMin < nextMin;
+          const row = document.createElement('div');
+          row.className = 'wg-wk-row' + (isDone ? ' done' : '') + (active ? ' active' : '');
+          row.innerHTML = `<span class="wg-wk-time">${blk.time}</span><span class="wg-wk-task"><b>${escw(blk.title)}</b>${detail ? `<span>${escw(detail)}</span>` : ''}</span><span class="wg-wk-check">${isDone ? '✓' : ''}</span>`;
+          row.addEventListener('pointerdown', (e) => e.stopPropagation());
+          row.onclick = (e) => {
+            e.stopPropagation();
+            w.config.done = w.config.done || {};
+            const arr = (w.config.done[ds] = w.config.done[ds] || []);
+            const p = arr.indexOf(idx);
+            if (p >= 0) arr.splice(p, 1); else arr.push(idx);
+            wapi.put(w.id, { config: w.config });
+            this.render(body, w);
+          };
+          list.appendChild(row);
+        });
+        customs.forEach((c, ci) => {
+          const row = document.createElement('div');
+          row.className = 'wg-wk-row custom';
+          row.innerHTML = `<span class="wg-wk-time">•</span><span class="wg-wk-task"><b>${escw(c.title)}</b></span><button class="wg-wk-del">✕</button>`;
+          const del = row.querySelector('.wg-wk-del');
+          del.addEventListener('pointerdown', (e) => e.stopPropagation());
+          del.onclick = (e) => { e.stopPropagation(); customs.splice(ci, 1); wapi.put(w.id, { config: w.config }); this.render(body, w); };
+          list.appendChild(row);
+        });
+
+        body.querySelectorAll('.wg-wk-day').forEach((b) => {
+          b.addEventListener('pointerdown', (e) => e.stopPropagation());
+          b.onclick = (e) => { e.stopPropagation(); w._sel = +b.dataset.i; this.render(body, w); };
+        });
+        const addBtn = body.querySelector('.wg-wk-addbtn'), form = body.querySelector('.wg-wk-addform'), input = body.querySelector('.wg-wk-input');
+        [addBtn, form, input].forEach((x) => x.addEventListener('pointerdown', (e) => e.stopPropagation()));
+        addBtn.onclick = (e) => { e.stopPropagation(); form.hidden = !form.hidden; if (!form.hidden) input.focus(); };
+        const addTask = (title) => {
+          if (!title.trim()) return;
+          w.config.custom = w.config.custom || {};
+          (w.config.custom[ds] = w.config.custom[ds] || []).push({ title: title.trim() });
+          wapi.put(w.id, { config: w.config });
+          input.value = ''; form.hidden = true;
+          this.render(body, w);
+        };
+        input.onkeydown = (e) => { if (e.key === 'Enter') addTask(input.value); };
+        body.querySelectorAll('.wg-wk-chip').forEach((c) => {
+          c.addEventListener('pointerdown', (e) => e.stopPropagation());
+          c.onclick = (e) => { e.stopPropagation(); addTask(c.dataset.t); };
+        });
+      },
+      tick(body, w) {
+        const form = body.querySelector('.wg-wk-addform');
+        if (form && !form.hidden) return; // don't disrupt an open quick-add
+        if (!w._wkT || Date.now() - w._wkT > 60000) this.render(body, w);
       },
     },
   };
