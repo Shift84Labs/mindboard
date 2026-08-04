@@ -282,23 +282,19 @@
     return t;
   }
 
-  // AXIOM daily operating schedule (baked into the weekly calendar widget)
-  const AXIOM_SCHEDULE = [
-    { time: '9:00', title: 'Command Center', task: 'Set revenue, outreach, build & skill targets. Pick one must-do.' },
-    { time: '9:30', title: 'Client Growth', task: 'Check analytics, post a promo, contact 5 clients, log outreach.' },
-    { time: '11:00', title: 'Service Build', task: 'Build or improve one fixed-price AXIOM service package.' },
-    { time: '12:30', title: 'Lunch + Learning', learn: true },
-    { time: '1:00', title: 'CRM / Ticketing', task: 'Update client records, tickets, quotes, follow-ups, leads.' },
-    { time: '2:30', title: 'Business Admin', task: 'EIN, bank, Chamber, accounting, invoices, proposals, legal.' },
-    { time: '3:30', title: 'Build / Lab', build: true },
-    { time: '4:30', title: 'Daily Closeout', task: 'Log leads, replies, quotes, jobs, money, skill, tomorrow’s first task.' },
+  // generic weekly-planner defaults — every instance is fully customizable via ⚙
+  const DEFAULT_WEEK_BLOCKS = [
+    { time: '9:00', title: 'Morning kickoff', desc: 'Plan the day and set your top priority.' },
+    { time: '10:00', title: 'Deep work', desc: 'Focus on your most important task.' },
+    { time: '12:30', title: 'Lunch + learning', desc: 'Break and learn something new.' },
+    { time: '1:30', title: 'Meetings / calls', desc: 'Sync, follow-ups, and communication.' },
+    { time: '3:00', title: 'Build / create', desc: 'Make progress on a project or deliverable.' },
+    { time: '4:30', title: 'Wrap-up', desc: 'Review, log progress, set tomorrow’s first task.' },
   ];
-  // rotations, indexed Monday-first (0 = Mon … 6 = Sun)
-  const AXIOM_LEARN = ['Google Analytics / SEO', 'Sales & client calls', 'Docker / self-hosting', 'Pricing & proposals', 'Cybersecurity', 'Home lab / automation', 'Business planning'];
-  const AXIOM_BUILD = ['CRM/ticketing Docker stack', 'AXIOM website improvements', 'Client intake form + automation', 'Price sheet + proposal templates', 'Security audit checklist', 'Smart home / camera templates', 'Weekly review + next-week planning'];
-  const AXIOM_FOCUS = ['Money + Setup', 'Services + Pricing', 'Client Outreach', 'Build Tools', 'Sales + Follow-Up', 'Field Work', 'Review + Planning'];
-  const AXIOM_TASKS = ['Contact 5 clients', 'Post promotion', 'Send a quote', 'Follow up leads', 'Update CRM', 'Improve a skill', 'Track money', 'Set tomorrow task'];
-  function timeToMin(t) { const p = t.split(':'); let h = +p[0]; const m = +p[1] || 0; if (h < 8) h += 12; return h * 60 + m; }
+  const DEFAULT_WEEK_TASKS = ['Email', 'Call', 'Follow up', 'Review', 'Plan', 'Break'];
+  const WEEKDAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  // times are 12-hour daytime: 1–6 read as PM, 7–12 as typed
+  function timeToMin(t) { const p = String(t).split(':'); let h = +p[0] || 0; const m = +p[1] || 0; if (h <= 6) h += 12; return h * 60 + m; }
 
   const TYPES = {
     /* ---------- clock ---------- */
@@ -1447,10 +1443,12 @@
       },
     },
 
-    /* ---------- AXIOM weekly schedule ---------- */
+    /* ---------- weekly planner (fully customizable) ---------- */
     weekcal: {
-      label: 'AXIOM Week',
-      defaults: { w: 360, h: 380, config: { done: {}, custom: {} } },
+      label: 'Week Planner',
+      defaults: { w: 360, h: 380, config: { title: 'Weekly Planner', blocks: null, tasks: null, focus: ['', '', '', '', '', '', ''], done: {}, custom: {} } },
+      _blocks(w) { return (w.config.blocks && w.config.blocks.length) ? w.config.blocks : DEFAULT_WEEK_BLOCKS; },
+      _tasks(w) { return (w.config.tasks && w.config.tasks.length) ? w.config.tasks : DEFAULT_WEEK_TASKS; },
       render(body, w) {
         w._wkT = Date.now();
         const now = new Date();
@@ -1459,37 +1457,40 @@
         const monday = new Date(now); monday.setDate(now.getDate() - todayIdx); monday.setHours(0, 0, 0, 0);
         const selDate = new Date(monday); selDate.setDate(monday.getDate() + w._sel);
         const ds = ymd(selDate);
-        const chips = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+        const blocks = this._blocks(w);
+        const tasks = this._tasks(w);
+        const title = w.config.title || 'Weekly Planner';
+        const focus = (w.config.focus && w.config.focus[w._sel]) || '';
         const done = (w.config.done && w.config.done[ds]) || [];
         const customs = (w.config.custom && w.config.custom[ds]) || [];
         const nowMin = now.getHours() * 60 + now.getMinutes();
         const isToday = w._sel === todayIdx;
+        const chips = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
         body.innerHTML = `
           <div class="wg-wk">
-            <div class="wg-wk-head"><span>📅 AXIOM Week</span><span class="wg-wk-focus">${escw(AXIOM_FOCUS[w._sel])}</span></div>
+            <div class="wg-wk-head"><span>📅 ${escw(title)}</span>${focus ? `<span class="wg-wk-focus">${escw(focus)}</span>` : ''}</div>
             <div class="wg-wk-days">
               ${chips.map((c, i) => `<button class="wg-wk-day ${i === w._sel ? 'sel' : ''} ${i === todayIdx ? 'today' : ''}" data-i="${i}">${c}</button>`).join('')}
             </div>
             <div class="wg-wk-list"></div>
             <div class="wg-wk-add">
-              <button class="wg-btn wg-wk-addbtn">＋ Add task to ${['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][w._sel]}</button>
+              <button class="wg-btn wg-wk-addbtn">＋ Add task to ${WEEKDAY_NAMES[w._sel]}</button>
               <div class="wg-wk-addform" hidden>
                 <input class="wg-wk-input" placeholder="Custom task…" maxlength="60"/>
-                <div class="wg-wk-chips">${AXIOM_TASKS.map((t) => `<button class="wg-wk-chip" data-t="${escw(t)}">${escw(t)}</button>`).join('')}</div>
+                <div class="wg-wk-chips">${tasks.map((t) => `<button class="wg-wk-chip" data-t="${escw(t)}">${escw(t)}</button>`).join('')}</div>
               </div>
             </div>
           </div>`;
 
         const list = body.querySelector('.wg-wk-list');
-        AXIOM_SCHEDULE.forEach((blk, idx) => {
-          const detail = blk.learn ? AXIOM_LEARN[w._sel] : blk.build ? AXIOM_BUILD[w._sel] : blk.task;
+        blocks.forEach((blk, idx) => {
           const isDone = done.includes(idx);
-          const nextMin = idx + 1 < AXIOM_SCHEDULE.length ? timeToMin(AXIOM_SCHEDULE[idx + 1].time) : 17 * 60;
+          const nextMin = idx + 1 < blocks.length ? timeToMin(blocks[idx + 1].time) : 22 * 60;
           const active = isToday && nowMin >= timeToMin(blk.time) && nowMin < nextMin;
           const row = document.createElement('div');
           row.className = 'wg-wk-row' + (isDone ? ' done' : '') + (active ? ' active' : '');
-          row.innerHTML = `<span class="wg-wk-time">${blk.time}</span><span class="wg-wk-task"><b>${escw(blk.title)}</b>${detail ? `<span>${escw(detail)}</span>` : ''}</span><span class="wg-wk-check">${isDone ? '✓' : ''}</span>`;
+          row.innerHTML = `<span class="wg-wk-time">${escw(blk.time)}</span><span class="wg-wk-task"><b>${escw(blk.title)}</b>${blk.desc ? `<span>${escw(blk.desc)}</span>` : ''}</span><span class="wg-wk-check">${isDone ? '✓' : ''}</span>`;
           row.addEventListener('pointerdown', (e) => e.stopPropagation());
           row.onclick = (e) => {
             e.stopPropagation();
@@ -1519,10 +1520,10 @@
         const addBtn = body.querySelector('.wg-wk-addbtn'), form = body.querySelector('.wg-wk-addform'), input = body.querySelector('.wg-wk-input');
         [addBtn, form, input].forEach((x) => x.addEventListener('pointerdown', (e) => e.stopPropagation()));
         addBtn.onclick = (e) => { e.stopPropagation(); form.hidden = !form.hidden; if (!form.hidden) input.focus(); };
-        const addTask = (title) => {
-          if (!title.trim()) return;
+        const addTask = (t) => {
+          if (!t.trim()) return;
           w.config.custom = w.config.custom || {};
-          (w.config.custom[ds] = w.config.custom[ds] || []).push({ title: title.trim() });
+          (w.config.custom[ds] = w.config.custom[ds] || []).push({ title: t.trim() });
           wapi.put(w.id, { config: w.config });
           input.value = ''; form.hidden = true;
           this.render(body, w);
@@ -1537,6 +1538,58 @@
         const form = body.querySelector('.wg-wk-addform');
         if (form && !form.hidden) return; // don't disrupt an open quick-add
         if (!w._wkT || Date.now() - w._wkT > 60000) this.render(body, w);
+      },
+      configUI(wrap, w, save) {
+        const c = w.config;
+        if (!c.blocks) c.blocks = DEFAULT_WEEK_BLOCKS.map((b) => ({ ...b }));
+        if (!c.tasks) c.tasks = [...DEFAULT_WEEK_TASKS];
+        if (!c.focus) c.focus = ['', '', '', '', '', '', ''];
+        const draw = () => {
+          wrap.innerHTML = `
+            <span class="edit-label">Widget name</span>
+            <div class="cfg-row"><input id="wkTitle" class="note-title-input" style="margin:0" value="${escw(c.title || '')}" placeholder="Weekly Planner"/></div>
+            <span class="edit-label" style="margin-top:12px">Time blocks</span>
+            <div id="wkBlocks" class="wk-cfg-blocks"></div>
+            <button id="wkAddBlock" class="tool-btn" style="margin-top:6px">+ Add block</button>
+            <span class="edit-label" style="margin-top:14px">Quick-fill tasks</span>
+            <div id="wkTasks" class="wk-cfg-tasks"></div>
+            <div class="cfg-row" style="margin-top:6px"><input id="wkTaskNew" class="note-title-input" style="margin:0" placeholder="Add a task…"/><button id="wkTaskAdd" class="tool-btn">+</button></div>
+            <span class="edit-label" style="margin-top:14px">Daily focus (optional)</span>
+            <div id="wkFocus" class="wk-cfg-focus"></div>`;
+          el('wkTitle').onchange = (e) => { c.title = e.target.value.trim() || 'Weekly Planner'; save(); };
+          const bWrap = el('wkBlocks');
+          c.blocks.forEach((b, i) => {
+            const row = document.createElement('div');
+            row.className = 'wk-cfg-block';
+            row.innerHTML = `<input class="wk-b-time" value="${escw(b.time)}" placeholder="9:00"/><input class="wk-b-title" value="${escw(b.title)}" placeholder="Title"/><button class="wk-b-del" title="Remove block">✕</button><input class="wk-b-desc" value="${escw(b.desc || '')}" placeholder="Description (optional)"/>`;
+            row.querySelector('.wk-b-time').onchange = (e) => { b.time = e.target.value.trim(); save(); };
+            row.querySelector('.wk-b-title').onchange = (e) => { b.title = e.target.value.trim(); save(); };
+            row.querySelector('.wk-b-desc').onchange = (e) => { b.desc = e.target.value.trim(); save(); };
+            row.querySelector('.wk-b-del').onclick = () => { c.blocks.splice(i, 1); save(); draw(); };
+            bWrap.appendChild(row);
+          });
+          el('wkAddBlock').onclick = () => { c.blocks.push({ time: '12:00', title: 'New block', desc: '' }); save(); draw(); };
+          const tWrap = el('wkTasks');
+          c.tasks.forEach((t, i) => {
+            const chip = document.createElement('span');
+            chip.className = 'tag-chip';
+            chip.innerHTML = `${escw(t)} <button class="wk-t-del">✕</button>`;
+            chip.querySelector('.wk-t-del').onclick = () => { c.tasks.splice(i, 1); save(); draw(); };
+            tWrap.appendChild(chip);
+          });
+          const addTaskFn = () => { const v = el('wkTaskNew').value.trim(); if (v) { c.tasks.push(v); save(); draw(); } };
+          el('wkTaskAdd').onclick = addTaskFn;
+          el('wkTaskNew').onkeydown = (e) => { if (e.key === 'Enter') addTaskFn(); };
+          const fWrap = el('wkFocus');
+          WEEKDAY_NAMES.forEach((d, i) => {
+            const row = document.createElement('div');
+            row.className = 'wk-cfg-focus-row';
+            row.innerHTML = `<span>${d}</span><input value="${escw(c.focus[i] || '')}" placeholder="Focus for ${d}"/>`;
+            row.querySelector('input').onchange = (e) => { c.focus[i] = e.target.value.trim(); save(); };
+            fWrap.appendChild(row);
+          });
+        };
+        draw();
       },
     },
   };

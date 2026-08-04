@@ -1076,6 +1076,22 @@ body.display-page .note-card:hover { transform: none; box-shadow: none; }
 .wg-wk-chips { display: flex; flex-wrap: wrap; gap: 4px; }
 .wg-wk-chip { background: var(--panel-2); border: 1px solid var(--border); color: var(--text); border-radius: 999px; padding: 3px 8px; font-size: 10.5px; cursor: pointer; }
 .wg-wk-chip:hover { border-color: var(--accent); }
+/* week planner config UI */
+.wk-cfg-blocks { display: flex; flex-direction: column; gap: 8px; }
+.wk-cfg-block { display: grid; grid-template-columns: 64px 1fr auto; gap: 6px; align-items: center; }
+.wk-cfg-block input { background: var(--panel-2); border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 6px 8px; font-size: 13px; outline: none; }
+.wk-cfg-block input:focus { border-color: var(--accent); }
+.wk-cfg-block .wk-b-desc { grid-column: 1 / -1; }
+.wk-cfg-block .wk-b-del { background: transparent; border: none; color: var(--muted); font-size: 12px; cursor: pointer; }
+.wk-cfg-block .wk-b-del:hover { color: var(--danger); }
+.wk-cfg-tasks { display: flex; flex-wrap: wrap; gap: 6px; }
+.wk-cfg-tasks .wk-t-del { background: transparent; border: none; color: var(--muted); font-size: 11px; cursor: pointer; }
+.wk-cfg-tasks .wk-t-del:hover { color: var(--danger); }
+.wk-cfg-focus { display: flex; flex-direction: column; gap: 5px; }
+.wk-cfg-focus-row { display: flex; align-items: center; gap: 8px; }
+.wk-cfg-focus-row span { width: 34px; font-size: 12px; color: var(--muted); }
+.wk-cfg-focus-row input { flex: 1; background: var(--panel-2); border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 6px 8px; font-size: 13px; outline: none; }
+.wk-cfg-focus-row input:focus { border-color: var(--accent); }
 
 /* ---- timer name ---- */
 .wg-timer-name {
