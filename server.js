@@ -21,7 +21,12 @@ function loadDb() {
     db.settings = db.settings || {};
     db.reminders = db.reminders || [];
     return db;
-  } catch {
+  } catch (e) {
+    // corrupt or unreadable: starting empty would let the next save overwrite the real file
+    if (e.code !== 'ENOENT') {
+      console.error(`Cannot load ${DB_FILE}: ${e.message}`);
+      process.exit(1);
+    }
     return { notes: [], tags: [], widgets: [], settings: {}, reminders: [] };
   }
 }
