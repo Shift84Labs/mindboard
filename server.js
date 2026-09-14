@@ -49,8 +49,61 @@ let db = loadDb();
 
 const uid = () => crypto.randomBytes(8).toString('hex');
 
+// ---------- input validation ----------
+// Every POST/PUT to notes, tags, widgets and reminders is checked here, so the board,
+// the widgets and the reminder scheduler only ever see the types they expect.
+const FREQS = ['once', 'hourly', 'daily', 'weekly'];
+const isStr = (v) => typeof v === 'string';
+const isBool = (v) => typeof v === 'boolean';
+const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
+const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
+const isColor = (v) => isStr(v) && /^(#[0-9a-f]{6})?$/i.test(v); // '' means default
+const isDate = (v) => isStr(v) && Number.isFinite(Date.parse(v));
+const isId = (v) => isStr(v) && /^[0-9a-f]{16}$/.test(v);
+const arrayOf = (check) => (v) => Array.isArray(v) && v.every(check);
+
+const WRITE_CHECKS = {
+  notes: {
+    title: isStr,
+    text: isStr,
+    checklist: arrayOf((c) => isObj(c) && isStr(c.text) && isBool(c.done)),
+    tags: arrayOf(isId),
+    color: isColor,
+    textColor: isColor,
+    images: arrayOf((u) => isStr(u) && /^\/uploads\/[0-9a-f]{16}\.[a-z0-9]+$/.test(u)),
+    pinned: isBool,
+    reminder: (r) => r === null || (isObj(r) && isDate(r.at) && FREQS.includes(r.freq) && isBool(r.enabled)),
+  },
+  tags: { name: isStr, color: isColor, pinned: isBool },
+  widgets: {
+    type: (v) => isStr(v) && /^[A-Za-z]{1,40}$/.test(v),
+    x: isNum, y: isNum, w: isNum, h: isNum, z: isNum,
+    // only the shape is checked: per-widget config values still reach innerHTML, and the
+    // CSP header is what keeps them from running script
+    config: isObj,
+  },
+  reminders: { text: isStr, at: isDate, freq: (v) => FREQS.includes(v), enabled: isBool },
+};
+
+function validateWrite(req, res, next) {
+  if ((req.method !== 'POST' && req.method !== 'PUT') || !Object.hasOwn(WRITE_CHECKS, req.params.kind)) return next();
+  if (!isObj(req.body)) return res.status(400).json({ error: 'Expected a JSON object' });
+  const checks = WRITE_CHECKS[req.params.kind];
+  const bad = Object.keys(checks).find((f) => f in req.body && !checks[f](req.body[f]));
+  if (bad) return res.status(400).json({ error: `Invalid ${bad}` });
+  next();
+}
+
 // ---------- middleware ----------
+app.disable('x-powered-by');
+// the UI has no inline scripts, so markup injected into a page can't run script
+// (uploads replace this with their own sandbox policy)
+app.use((req, res, next) => {
+  res.set('Content-Security-Policy', "script-src 'self'; object-src 'none'; base-uri 'none'");
+  next();
+});
 app.use(express.json({ limit: '5mb' }));
+app.use('/api/:kind', validateWrite);
 app.use(express.static(path.join(__dirname, 'public')));
 // uploads are user content: never let a browser run one as a page or a script
 app.use('/uploads', express.static(UPLOAD_DIR, {
