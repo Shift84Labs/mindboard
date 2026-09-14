@@ -120,6 +120,19 @@ volumes:
   mindboard_data:
 ```
 
+### Upgrading an existing install
+
+The image runs as the unprivileged `node` user (uid 1000). Data written by
+older images is owned by root: the board still loads, but every save and
+upload fails with `EACCES` in the logs. Fix ownership once, then start the
+new image:
+
+```bash
+docker run --rm -v mindboard_data:/app/data alpine chown -R 1000:1000 /app/data
+```
+
+For a bind mount, run `sudo chown -R 1000:1000 ./data` on the host instead.
+
 ## Telegram setup (optional)
 
 1. Talk to [@BotFather](https://t.me/BotFather) in Telegram → `/newbot` →
