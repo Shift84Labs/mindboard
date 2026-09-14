@@ -12,6 +12,16 @@ const UPLOAD_DIR = path.join(DATA_DIR, 'uploads');
 const DB_FILE = path.join(DATA_DIR, 'db.json');
 
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+// a data dir the process can't write (e.g. root-owned after an image upgrade) would
+// fail every save with a 500; refuse to start instead
+for (const dir of [DATA_DIR, UPLOAD_DIR]) {
+  try {
+    fs.accessSync(dir, fs.constants.W_OK);
+  } catch (e) {
+    console.error(`Cannot write to ${dir}: ${e.message}`);
+    process.exit(1);
+  }
+}
 
 // ---------- tiny JSON file DB ----------
 function loadDb() {
