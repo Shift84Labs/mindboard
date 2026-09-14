@@ -42,21 +42,23 @@ const uid = () => crypto.randomBytes(8).toString('hex');
 // ---------- middleware ----------
 app.use(express.json({ limit: '5mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
-app.use('/uploads', express.static(UPLOAD_DIR));
+// uploads are user content: never let a browser run one as a page or a script
+app.use('/uploads', express.static(UPLOAD_DIR, {
+  setHeaders: (res) => res.set({ 'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': 'sandbox' }),
+}));
 
 // ---------- uploads ----------
+// the stored extension comes from the checked mimetype, never the client's filename
+const IMAGE_EXT = { 'image/png': '.png', 'image/jpeg': '.jpg', 'image/jpg': '.jpg', 'image/gif': '.gif', 'image/webp': '.webp', 'image/avif': '.avif' };
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, UPLOAD_DIR),
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase();
-    cb(null, uid() + ext);
-  },
+  filename: (req, file, cb) => cb(null, uid() + IMAGE_EXT[file.mimetype]),
 });
 const upload = multer({
   storage,
   limits: { fileSize: 15 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
-    const ok = /^image\/(png|jpe?g|gif|webp|svg\+xml|avif)$/.test(file.mimetype);
+    const ok = Object.hasOwn(IMAGE_EXT, file.mimetype);
     cb(ok ? null : new Error('Only image files are allowed'), ok);
   },
 });
