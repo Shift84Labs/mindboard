@@ -60,6 +60,21 @@ $('fontSelect').onchange = (e) => {
   document.documentElement.dataset.font = e.target.value;
 };
 
+/* ============ telegram status ============ */
+// the bridge reconnects on its own; this only warns that reminders can't reach Telegram right now
+async function refreshTelegramStatus() {
+  try {
+    const { status, detail } = await api.get('/api/telegram');
+    const pill = $('telegramStatus');
+    pill.hidden = status !== 'disconnected';
+    pill.title = `Telegram disconnected (${detail}). Reminders are retried until it reconnects.`;
+  } catch {
+    // board server unreachable: leave the indicator as it was
+  }
+}
+refreshTelegramStatus();
+setInterval(refreshTelegramStatus, 30 * 1000);
+
 /* ============ mobile / desktop layout mode ============ */
 const mobileQuery = matchMedia('(max-width: 820px)');
 function detectMobile() {

@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const http = require('node:http');
 const path = require('node:path');
-const { tmpDataDir, boot } = require('./helpers');
+const { tmpDataDir, boot, freePort } = require('./helpers');
 
 const OWNER = 111;
 const STRANGER = 999;
@@ -44,14 +44,24 @@ function botEnv(tg) {
   return { TELEGRAM_BOT_TOKEN: 'test_token', TELEGRAM_API_URL: tg.url, TELEGRAM_ALLOWED_CHAT_ID: String(OWNER) };
 }
 
+// nothing listens on a port that was just released, so every Bot API call is refused
+async function unreachableEnv() {
+  return { TELEGRAM_BOT_TOKEN: 'test_token', TELEGRAM_API_URL: `http://127.0.0.1:${await freePort()}` };
+}
+
 function seedDb(dir, data) {
   const db = { notes: [], tags: [], widgets: [], settings: {}, reminders: [], ...data };
   fs.writeFileSync(path.join(dir, 'db.json'), JSON.stringify(db));
 }
 
+async function telegramStatus(base) {
+  const res = await fetch(base + '/api/telegram').catch(() => null);
+  return res && res.ok ? res.json() : null;
+}
+
 async function waitFor(check, ms = 5000) {
   for (const end = Date.now() + ms; Date.now() < end; ) {
-    if (check()) return true;
+    if (await check()) return true;
     await new Promise((r) => setTimeout(r, 50));
   }
   return false;
@@ -109,4 +119,36 @@ test('a reminder whose Telegram send fails stays due so the next check retries i
   await new Promise((r) => setTimeout(r, 300)); // give the server time to handle the rejection
   const [rem] = await (await fetch(base + '/api/reminders')).json();
   assert.equal(rem.enabled, true);
+});
+
+test('an unreachable Bot API at startup does not take the board down', { timeout: 15000 }, async (t) => {
+  const { base, exitCode } = await boot(t, tmpDataDir(t), await unreachableEnv());
+  assert.ok(base, `server exited with ${exitCode}`);
+
+  await new Promise((r) => setTimeout(r, 1500)); // a refused getMe fails within milliseconds
+  const res = await fetch(base + '/api/notes').catch(() => null);
+  assert.ok(res && res.ok, 'the server stopped answering once the Bot API was unreachable');
+});
+
+test('the board reports Telegram as disconnected, with a reason, while the Bot API is unreachable', { timeout: 15000 }, async (t) => {
+  const { base, exitCode } = await boot(t, tmpDataDir(t), await unreachableEnv());
+  assert.ok(base, `server exited with ${exitCode}`);
+
+  assert.ok(await waitFor(async () => (await telegramStatus(base))?.status === 'disconnected'), 'status never became disconnected');
+  assert.ok((await telegramStatus(base)).detail, 'disconnected without a reason');
+});
+
+test('the board reports Telegram as connected once the Bot API answers', { timeout: 15000 }, async (t) => {
+  const tg = await fakeTelegram(t);
+  const { base, exitCode } = await boot(t, tmpDataDir(t), botEnv(tg));
+  assert.ok(base, `server exited with ${exitCode}`);
+
+  assert.ok(await waitFor(async () => (await telegramStatus(base))?.status === 'connected'), 'status never became connected');
+});
+
+test('without a bot token the board reports Telegram as disabled', { timeout: 15000 }, async (t) => {
+  const { base, exitCode } = await boot(t, tmpDataDir(t));
+  assert.ok(base, `server exited with ${exitCode}`);
+
+  assert.equal((await telegramStatus(base))?.status, 'disabled');
 });

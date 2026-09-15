@@ -48,4 +48,4 @@ async function boot(t, dataDir, env = {}) {
   return result;
 }
 
-module.exports = { tmpDataDir, boot };
+module.exports = { tmpDataDir, boot, freePort };

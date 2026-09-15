@@ -362,13 +362,37 @@ async function handleTgMessage(msg) {
   await tg('sendMessage', { chat_id: chatId, text: `✅ Added to MindBoard${images.length ? ' (with photo)' : ''}` });
 }
 
+// bridge state for the board UI: disabled (no token), connecting, connected, or disconnected with a reason
+let tgStatus = { status: TG_TOKEN ? 'connecting' : 'disabled', detail: '' };
+const setTgStatus = (status, detail = '') => { tgStatus = { status, detail }; };
+app.get('/api/telegram', (req, res) => res.json(tgStatus));
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// fetch failures keep the useful part in their cause: a code (EAI_AGAIN, ECONNREFUSED) or a message
+const failure = (e) => e.cause?.code || e.cause?.message || e.message;
+
 async function tgPollLoop() {
-  const me = await tg('getMe');
-  if (!me.ok) {
-    console.error('Telegram: bot token rejected — bridge disabled');
-    return;
+  // Telegram is optional: an unreachable Bot API is retried with backoff instead of taking the board down
+  for (let delay = 5000; ; delay = Math.min(delay * 2, 5 * 60 * 1000)) {
+    try {
+      const me = await tg('getMe');
+      if (me.ok) {
+        console.log(`Telegram bridge active as @${me.result.username}`);
+        break;
+      }
+      if (me.error_code === 401 || me.error_code === 404) {
+        setTgStatus('disconnected', 'bot token rejected');
+        console.error('Telegram: bot token rejected, bridge disabled');
+        return;
+      }
+      setTgStatus('disconnected', me.description || 'Bot API error');
+    } catch (e) {
+      setTgStatus('disconnected', failure(e));
+    }
+    console.error(`Telegram: cannot reach the Bot API (${tgStatus.detail}), retrying in ${delay / 1000}s`);
+    await sleep(delay);
   }
-  console.log(`Telegram bridge active as @${me.result.username}`);
+  setTgStatus('connected');
   for (;;) {
     try {
       const updates = await tg('getUpdates', {
@@ -377,28 +401,36 @@ async function tgPollLoop() {
         allowed_updates: ['message'],
       });
       if (updates.ok) {
+        setTgStatus('connected');
         for (const u of updates.result) {
           db.settings.tgOffset = u.update_id;
           if (u.message) await handleTgMessage(u.message).catch((e) => console.error('Telegram message error:', e.message));
           saveDb(db);
         }
       } else if (updates.error_code === 409) {
+        setTgStatus('disconnected', 'another poller is using this bot token');
         console.error('Telegram: another poller is using this token (409), retrying in 60s');
-        await new Promise((r) => setTimeout(r, 60000));
+        await sleep(60000);
       } else {
+        setTgStatus('disconnected', updates.description || 'Bot API error');
         console.error('Telegram getUpdates error:', updates.description);
-        await new Promise((r) => setTimeout(r, 10000));
+        await sleep(10000);
       }
     } catch (e) {
-      console.error('Telegram poll error:', e.message);
-      await new Promise((r) => setTimeout(r, 5000));
+      setTgStatus('disconnected', failure(e));
+      console.error('Telegram poll error:', failure(e));
+      await sleep(5000);
     }
   }
 }
 
 if (TG_TOKEN) {
   if (!TG_ALLOWED) console.log('Telegram: TELEGRAM_ALLOWED_CHAT_ID is not set, so the bot locks to the first chat that messages it');
-  tgPollLoop();
+  // nothing in the bridge may crash the server
+  tgPollLoop().catch((e) => {
+    setTgStatus('disconnected', failure(e));
+    console.error('Telegram bridge stopped:', e.message);
+  });
 } else {
   console.log('Telegram bridge disabled (set TELEGRAM_BOT_TOKEN to enable)');
 }

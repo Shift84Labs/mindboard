@@ -442,6 +442,8 @@ input, textarea, select { font-family: inherit; }
 }
 .pill-btn:hover { border-color: var(--accent); }
 .pill-btn.pinned-active { border-color: var(--accent); background: var(--accent-dim); }
+.tg-status, .tg-status:hover { color: var(--danger); border-color: var(--danger); cursor: help; }
+.tg-status[hidden] { display: none; }
 
 /* ============ widget palette ============ */
 .widget-palette[hidden] { display: none; }
