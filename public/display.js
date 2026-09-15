@@ -79,14 +79,14 @@ function noteCard(n) {
     </div>
     ${n.tags.length ? `<div class="card-tags">${n.tags.map((id) => {
       const t = tagById(id);
-      return t ? `<span class="card-tag" style="background:${t.color}">#${esc(t.name)}</span>` : '';
+      return t ? `<span class="card-tag" style="background:${esc(t.color)}">#${esc(t.name)}</span>` : '';
     }).join('')}</div>` : ''}
     ${n.title ? `<h3>${esc(n.title)}</h3>` : ''}
     ${n.text ? `<div class="body-text">${esc(n.text)}</div>` : ''}
     ${n.checklist.length ? `<div class="card-checklist">${n.checklist.map((item) =>
       `<div class="check-item ${item.done ? 'done' : ''}"><input type="checkbox" disabled ${item.done ? 'checked' : ''}/><span>${esc(item.text)}</span></div>`
     ).join('')}</div><div class="check-progress">${done}/${n.checklist.length} done</div>` : ''}
-    ${n.images.length ? `<div class="card-images">${n.images.map((u) => `<img src="${u}" loading="lazy"/>`).join('')}</div>` : ''}
+    ${n.images.length ? `<div class="card-images">${n.images.map((u) => `<img src="${esc(u)}" loading="lazy"/>`).join('')}</div>` : ''}
   `;
   return card;
 }

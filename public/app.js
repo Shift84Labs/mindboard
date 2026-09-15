@@ -109,7 +109,7 @@ function renderTagRow() {
   for (const t of sorted) {
     const btn = document.createElement('button');
     btn.className = 'tag-chip tag-bubble' + (activeTagIds.has(t.id) ? ' active' : '');
-    btn.innerHTML = `<span class="dot" style="background:${t.color}"></span>#${esc(t.name)}${t.pinned ? ' <span class="pin-mark">📌</span>' : ''}`;
+    btn.innerHTML = `<span class="dot" style="background:${esc(t.color)}"></span>#${esc(t.name)}${t.pinned ? ' <span class="pin-mark">📌</span>' : ''}`;
     btn.onclick = () => {
       activeTagIds.has(t.id) ? activeTagIds.delete(t.id) : activeTagIds.add(t.id);
       renderTagRow();
@@ -146,10 +146,10 @@ function noteCard(n) {
       <span>${n.pinned ? '<span class="pin-flag">📌 PINNED · </span>' : ''}${fmtDate(n.createdAt)}</span>
       ${n.updatedAt !== n.createdAt ? `<span title="Last edited">✎ ${fmtDate(n.updatedAt)}</span>` : ''}
     </div>
-    ${n.reminder?.enabled ? `<div class="card-reminder">⏰ ${fmtDate(n.reminder.at)}${n.reminder.freq !== 'once' ? ' · ' + n.reminder.freq : ''}</div>` : ''}
+    ${n.reminder?.enabled ? `<div class="card-reminder">⏰ ${fmtDate(n.reminder.at)}${n.reminder.freq !== 'once' ? ' · ' + esc(n.reminder.freq) : ''}</div>` : ''}
     ${n.tags.length ? `<div class="card-tags">${n.tags.map((id) => {
       const t = tagById(id);
-      return t ? `<span class="card-tag" style="background:${t.color}">#${esc(t.name)}</span>` : '';
+      return t ? `<span class="card-tag" style="background:${esc(t.color)}">#${esc(t.name)}</span>` : '';
     }).join('')}</div>` : ''}
     ${n.title ? `<h3>${esc(n.title)}</h3>` : ''}
     ${n.text ? `<div class="body-text">${esc(n.text)}</div>` : ''}
@@ -384,7 +384,7 @@ function renderNoteImages() {
   editingNote.images.forEach((url, idx) => {
     const div = document.createElement('div');
     div.className = 'img-thumb';
-    div.innerHTML = `<img src="${url}" />`;
+    div.innerHTML = `<img src="${esc(url)}" />`;
     const rm = document.createElement('button');
     rm.className = 'remove-img';
     rm.textContent = '✕';
@@ -426,7 +426,7 @@ function renderTagPicker() {
     const btn = document.createElement('button');
     const on = editingNote.tags.includes(t.id);
     btn.className = 'tag-chip' + (on ? ' active' : '');
-    btn.innerHTML = `<span class="dot" style="background:${t.color}"></span>#${esc(t.name)}`;
+    btn.innerHTML = `<span class="dot" style="background:${esc(t.color)}"></span>#${esc(t.name)}`;
     btn.onclick = () => {
       const i = editingNote.tags.indexOf(t.id);
       i >= 0 ? editingNote.tags.splice(i, 1) : editingNote.tags.push(t.id);
