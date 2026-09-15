@@ -471,10 +471,12 @@ function advanceReminder(r) {
     r.enabled = false;
     return;
   }
-  let t = new Date(r.at).getTime();
+  const t = new Date(r.at).getTime();
   const now = Date.now();
-  while (t <= now) t += step;
-  r.at = new Date(t).toISOString();
+  // jump straight to the first occurrence after now; stepping one interval at a time
+  // stalls the server for seconds when the stored date is far in the past
+  const next = t > now ? t : t + (Math.floor((now - t) / step) + 1) * step;
+  r.at = new Date(next).toISOString();
 }
 
 function noteReminderMessage(n) {
