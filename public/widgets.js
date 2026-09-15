@@ -300,6 +300,7 @@
   function timeToMin(t) { const p = String(t).split(':'); let h = +p[0] || 0; const m = +p[1] || 0; if (h <= 6) h += 12; return h * 60 + m; }
 
   const TYPES = {
+    __proto__: null, // a stored type like "constructor" must not resolve to an Object.prototype member
     /* ---------- clock ---------- */
     clock: {
       label: 'Clock',
@@ -1890,7 +1891,13 @@
 
     canvas.appendChild(div);
     w._el = div;
-    TYPES[w.type]?.render(body, w);
+    try {
+      TYPES[w.type]?.render(body, w);
+    } catch (e) {
+      // a bad config must cost only its own widget, not every widget mounted after it
+      console.error(`Widget ${w.id} (${w.type}) failed to render:`, e);
+      body.textContent = 'Widget failed to load';
+    }
   }
 
   function attachDragResize(div, handle, w) {
@@ -2039,7 +2046,13 @@
   setInterval(() => {
     for (const w of widgets) {
       const body = w._el?.querySelector('.widget-body');
-      if (body && TYPES[w.type]?.tick) TYPES[w.type].tick(body, w);
+      if (!body || !TYPES[w.type]?.tick) continue;
+      try {
+        TYPES[w.type].tick(body, w);
+      } catch (e) {
+        if (!w._tickFailed) console.error(`Widget ${w.id} (${w.type}) failed to update:`, e);
+        w._tickFailed = true;
+      }
     }
   }, 1000);
 
