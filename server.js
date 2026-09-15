@@ -78,8 +78,8 @@ const WRITE_CHECKS = {
   widgets: {
     type: (v) => isStr(v) && /^[A-Za-z]{1,40}$/.test(v),
     x: isNum, y: isNum, w: isNum, h: isNum, z: isNum,
-    // only the shape is checked: per-widget config values still reach innerHTML, and the
-    // CSP header is what keeps them from running script
+    // only the shape is checked: widgets.js escapes or coerces each config value before it
+    // reaches markup, and the CSP header is the backstop if one is missed
     config: isObj,
   },
   reminders: { text: isStr, at: isDate, freq: (v) => FREQS.includes(v), enabled: isBool },

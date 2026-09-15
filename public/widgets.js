@@ -25,6 +25,9 @@
   };
 
   const escw = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  // widget config arrives untyped from the API: numeric fields are coerced and clamped before
+  // they reach markup or loop bounds, so a stored string can't inject markup or hang the page
+  const num = (v, min, max, dflt) => (v == null || v === '' || !Number.isFinite(+v) ? dflt : Math.min(max, Math.max(min, +v)));
 
   /* ================= widget type registry ================= */
 
@@ -377,7 +380,7 @@
               </div>
             </div>
             <div class="wg-timer-presets">
-              ${(w.config.presets || [5, 10, 25, 45]).map((m) => `<button data-m="${m}">${m}m</button>`).join('')}
+              ${(w.config.presets || [5, 10, 25, 45]).map((v) => num(v, 1, 5999, 25)).map((m) => `<button data-m="${m}">${m}m</button>`).join('')}
             </div>
           </div>`;
         const nameInput = body.querySelector('.wg-timer-name');
@@ -629,7 +632,7 @@
               d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
             return `<div class="wg-rem-row" data-id="${r.id}">
               <div class="wg-rem-info"><span class="wg-rem-txt">${escw(r.text)}</span>
-              <span class="wg-rem-when-txt">${when}${r.freq !== 'once' ? ' · ' + r.freq : ''}</span></div>
+              <span class="wg-rem-when-txt">${when}${r.freq !== 'once' ? ' · ' + escw(r.freq) : ''}</span></div>
               ${EDITABLE ? '<button class="wg-rem-del" title="Delete reminder">✕</button>' : ''}
             </div>`;
           }).join('');
@@ -670,7 +673,7 @@
         w._wx = Date.now();
         const unit = w.config.unit === 'C' ? 'celsius' : 'fahrenheit';
         try {
-          const r = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${w.config.lat}&longitude=${w.config.lon}&current=temperature_2m,weather_code,apparent_temperature&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max&temperature_unit=${unit}&timezone=auto&forecast_days=1`);
+          const r = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${encodeURIComponent(w.config.lat)}&longitude=${encodeURIComponent(w.config.lon)}&current=temperature_2m,weather_code,apparent_temperature&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max&temperature_unit=${unit}&timezone=auto&forecast_days=1`);
           const d = await r.json();
           const [icon, label] = WMO[d.current.weather_code] || ['🌡', '—'];
           const wrap = body.querySelector('.wg-weather');
@@ -682,7 +685,7 @@
               <span class="wg-weather-icon">${icon}</span>
             </div>
             <div class="wg-weather-sub">${label} · feels ${Math.round(d.current.apparent_temperature)}°</div>
-            <div class="wg-weather-sub">H ${Math.round(d.daily.temperature_2m_max[0])}° · L ${Math.round(d.daily.temperature_2m_min[0])}° · ☔ ${d.daily.precipitation_probability_max[0] ?? 0}%</div>`;
+            <div class="wg-weather-sub">H ${Math.round(d.daily.temperature_2m_max[0])}° · L ${Math.round(d.daily.temperature_2m_min[0])}° · ☔ ${num(d.daily.precipitation_probability_max[0], 0, 100, 0)}%</div>`;
         } catch {
           const wrap = body.querySelector('.wg-weather');
           if (wrap) wrap.innerHTML = '<div class="wg-weather-load">Weather unavailable</div>';
@@ -862,7 +865,7 @@
         const p = w._pomo;
         const label = p.phase === 'work' ? '🎯 Focus' : p.phase === 'long' ? '🌙 Long break' : '☕ Break';
         const today = new Date().toDateString();
-        const doneToday = w.config.date === today ? (w.config.done || 0) : 0;
+        const doneToday = w.config.date === today ? num(w.config.done, 0, 1e6, 0) : 0;
         body.innerHTML = `
           <div class="wg-pomo phase-${p.phase}">
             <svg class="wg-pomo-ring" viewBox="0 0 100 100"><circle class="ring-bg" cx="50" cy="50" r="44"/><circle class="ring-fg" cx="50" cy="50" r="44"/></svg>
@@ -927,7 +930,7 @@
       render(body, w) {
         const m = w._mem || (w._mem = { state: 'idle', len: 3, seq: [] });
         if (m.timer) { clearTimeout(m.timer); m.timer = null; }
-        const best = w.config.best || 0;
+        const best = num(w.config.best, 0, 1e6, 0);
         let mid = '';
         if (m.state === 'idle') mid = `<div class="wg-mem-hint">Watch the number, then type it back.</div><button class="wg-btn wg-mem-start">▶ Start</button>`;
         else if (m.state === 'show') mid = `<div class="wg-mem-seq">${m.seq.join(' ')}</div>`;
@@ -991,9 +994,10 @@
         const stop = (e2) => e2 && e2.addEventListener('pointerdown', (e) => e.stopPropagation());
         items.forEach((it) => {
           const done = it.lastDone === today;
+          const streak = num(it.streak, 0, 1e6, 0);
           const row = document.createElement('div');
           row.className = 'wg-hab-row';
-          row.innerHTML = `<input type="checkbox" ${done ? 'checked' : ''}/><span class="wg-hab-name-txt ${done ? 'done' : ''}">${escw(it.name)}</span><span class="wg-hab-streak">${it.streak ? '🔥 ' + it.streak : ''}</span>${EDITABLE ? '<button class="wg-hab-del" title="Remove">✕</button>' : ''}`;
+          row.innerHTML = `<input type="checkbox" ${done ? 'checked' : ''}/><span class="wg-hab-name-txt ${done ? 'done' : ''}">${escw(it.name)}</span><span class="wg-hab-streak">${streak ? '🔥 ' + streak : ''}</span>${EDITABLE ? '<button class="wg-hab-del" title="Remove">✕</button>' : ''}`;
           const cb = row.querySelector('input'); stop(cb);
           cb.onclick = (e) => { e.stopPropagation(); this.toggle(w, it); this.render(body, w); };
           const del = row.querySelector('.wg-hab-del');
@@ -1044,7 +1048,7 @@
         const today = new Date().toDateString();
         if (w.config.date !== today) { w.config.date = today; w.config.cups = 0; w.config.lastDrink = null; w.config.lastReminded = null; }
         body.dataset.d = today;
-        const cups = w.config.cups || 0, goal = w.config.goal || 8;
+        const cups = num(w.config.cups, 0, 1e6, 0), goal = num(w.config.goal, 1, 20, 8);
         let icons = '';
         for (let i = 0; i < goal; i++) icons += `<span class="wg-water-cup ${i < cups ? 'full' : ''}"></span>`;
         body.innerHTML = `
@@ -1072,7 +1076,7 @@
       },
       configUI(wrap, w, save) {
         wrap.innerHTML = `<span class="edit-label">Daily goal (cups)</span>
-          <div class="cfg-row"><input id="wgGoal" type="number" min="1" max="20" value="${w.config.goal || 8}" class="note-title-input" style="margin:0;width:100px"/></div>`;
+          <div class="cfg-row"><input id="wgGoal" type="number" min="1" max="20" value="${num(w.config.goal, 1, 20, 8)}" class="note-title-input" style="margin:0;width:100px"/></div>`;
         el('wgGoal').onchange = (e) => { w.config.goal = Math.max(1, Math.min(20, +e.target.value || 8)); save(); };
       },
     },
@@ -1361,7 +1365,7 @@
       label: 'Color Picker',
       defaults: { w: 240, h: 210, config: { color: '#4ade80' } },
       render(body, w) {
-        const c = w.config.color || '#4ade80';
+        const c = /^#[0-9a-f]{6}$/i.test(w.config.color) ? w.config.color : '#4ade80';
         body.innerHTML = `
           <div class="wg-cp">
             <input type="color" class="wg-cp-input" value="${c}"/>
@@ -1405,7 +1409,7 @@
         body.innerHTML = `
           <div class="wg-pw">
             <div class="wg-pw-out" title="Generated password">tap Generate</div>
-            <div class="wg-pw-row"><input type="range" min="6" max="40" value="${c.len || 16}" class="wg-pw-len"/><span class="wg-pw-lenval">${c.len || 16}</span></div>
+            <div class="wg-pw-row"><input type="range" min="6" max="40" value="${num(c.len, 6, 40, 16)}" class="wg-pw-len"/><span class="wg-pw-lenval">${num(c.len, 6, 40, 16)}</span></div>
             <div class="wg-pw-opts">
               <label><input type="checkbox" data-o="upper" ${c.upper ? 'checked' : ''}/>A-Z</label>
               <label><input type="checkbox" data-o="lower" ${c.lower ? 'checked' : ''}/>a-z</label>
@@ -1857,7 +1861,7 @@
     if (EDITABLE) {
       const bar = document.createElement('div');
       bar.className = 'widget-editbar';
-      bar.innerHTML = `<span class="widget-type-label">${TYPES[w.type]?.label || w.type}</span>`;
+      bar.innerHTML = `<span class="widget-type-label">${escw(TYPES[w.type]?.label || w.type)}</span>`;
       if (TYPES[w.type]?.configUI) {
         const cfg = document.createElement('button');
         cfg.textContent = '⚙';
