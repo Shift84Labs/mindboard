@@ -6,9 +6,26 @@ const path = require('node:path');
 
 const SERVER = path.join(__dirname, '..', 'server.js');
 
+const servers = new WeakMap(); // test context -> server processes it booted
+
+// Stop every server a test booted and wait until each one has exited.
+function stopServers(t) {
+  const running = [...(servers.get(t) || [])].filter((child) => child.exitCode === null && child.signalCode === null);
+  return Promise.all(running.map((child) => new Promise((resolve) => {
+    child.once('exit', resolve);
+    child.kill();
+  })));
+}
+
 function tmpDataDir(t) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mindboard_'));
-  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  // after hooks run in registration order and a throwing hook skips the rest, so the test's
+  // servers are stopped here first: one still running could write into dir mid-delete, and
+  // a failed delete must not leave it running and hang the test run
+  t.after(async () => {
+    await stopServers(t);
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
   return dir;
 }
 
@@ -30,7 +47,8 @@ async function boot(t, dataDir, env = {}) {
     env: { ...process.env, DATA_DIR: dataDir, PORT: String(port), TELEGRAM_BOT_TOKEN: '', ...env },
     stdio: 'ignore',
   });
-  t.after(() => child.kill());
+  servers.set(t, (servers.get(t) || new Set()).add(child));
+  t.after(() => stopServers(t));
   let done = false;
   const exited = new Promise((resolve) => child.on('exit', (code) => resolve({ exitCode: code })));
   const answered = (async () => {
