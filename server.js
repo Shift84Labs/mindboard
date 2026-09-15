@@ -283,12 +283,18 @@ app.post('/api/notify', async (req, res) => {
 });
 
 // ---------- telegram bridge ----------
-// Messages sent to the bot become notes tagged #TELEGRAM. The bot locks itself
-// to the first chat that messages it; other chats are rejected.
+// Messages sent to the bot become notes tagged #TELEGRAM. With TELEGRAM_ALLOWED_CHAT_ID set,
+// only that chat is accepted; otherwise the bot locks itself to the first chat that messages it.
 const TG_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
+const TG_ALLOWED = process.env.TELEGRAM_ALLOWED_CHAT_ID || '';
+// a self-hosted Bot API server can stand in for api.telegram.org
+const TG_API = process.env.TELEGRAM_API_URL || 'https://api.telegram.org';
+
+// chats the bot answers and notifies: the configured chat, or whichever chat claimed the lock
+const tgChats = () => (TG_ALLOWED ? [TG_ALLOWED] : db.settings.telegramChats || []);
 
 async function tg(method, params) {
-  const res = await fetch(`https://api.telegram.org/bot${TG_TOKEN}/${method}`, {
+  const res = await fetch(`${TG_API}/bot${TG_TOKEN}/${method}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(params || {}),
@@ -308,7 +314,7 @@ function telegramTag() {
 async function tgDownloadPhoto(fileId) {
   const info = await tg('getFile', { file_id: fileId });
   if (!info.ok) return null;
-  const res = await fetch(`https://api.telegram.org/file/bot${TG_TOKEN}/${info.result.file_path}`);
+  const res = await fetch(`${TG_API}/file/bot${TG_TOKEN}/${info.result.file_path}`);
   if (!res.ok) return null;
   const ext = path.extname(info.result.file_path) || '.jpg';
   const name = uid() + ext;
@@ -318,13 +324,13 @@ async function tgDownloadPhoto(fileId) {
 
 async function handleTgMessage(msg) {
   const chatId = msg.chat.id;
-  db.settings.telegramChats = db.settings.telegramChats || [];
-  if (!db.settings.telegramChats.length) {
-    db.settings.telegramChats.push(chatId);
+  if (!tgChats().length) {
+    db.settings.telegramChats = [chatId];
     saveDb(db);
     await tg('sendMessage', { chat_id: chatId, text: '🔒 MindBoard bot is now locked to this chat. Anything you send here lands on the board tagged #TELEGRAM.' });
   }
-  if (!db.settings.telegramChats.includes(chatId)) {
+  if (!tgChats().map(String).includes(String(chatId))) {
+    console.log(`Telegram: ignored a message from chat ${chatId}`);
     await tg('sendMessage', { chat_id: chatId, text: 'This bot is private.' });
     return;
   }
@@ -390,29 +396,42 @@ async function tgPollLoop() {
   }
 }
 
-if (TG_TOKEN) tgPollLoop();
-else console.log('Telegram bridge disabled (set TELEGRAM_BOT_TOKEN to enable)');
+if (TG_TOKEN) {
+  if (!TG_ALLOWED) console.log('Telegram: TELEGRAM_ALLOWED_CHAT_ID is not set, so the bot locks to the first chat that messages it');
+  tgPollLoop();
+} else {
+  console.log('Telegram bridge disabled (set TELEGRAM_BOT_TOKEN to enable)');
+}
 
 // ---------- reminder scheduler ----------
 function escHtml(s) {
   return String(s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
 }
 
+const tgReady = () => !!TG_TOKEN && tgChats().length > 0;
+
+// resolves true only when every chat got the message; Telegram's rejections are logged
 async function tgNotify(html) {
-  const chats = db.settings.telegramChats || [];
-  if (!TG_TOKEN || !chats.length) {
+  if (!tgReady()) {
     console.log('Notification (telegram not configured):', html.replace(/<[^>]+>/g, ''));
     return false;
   }
-  for (const chatId of chats) {
+  let delivered = true;
+  for (const chatId of tgChats()) {
     try {
-      await tg('sendMessage', { chat_id: chatId, text: html, parse_mode: 'HTML' });
+      const res = await tg('sendMessage', { chat_id: chatId, text: html, parse_mode: 'HTML' });
+      if (!res.ok) throw new Error(res.description || 'rejected');
     } catch (e) {
       console.error('Telegram notify error:', e.message);
+      delivered = false;
     }
   }
-  return true;
+  return delivered;
 }
+
+// A due item is handled once it is delivered, or when Telegram isn't set up and there is
+// nowhere to deliver it. A failed send leaves it due, so the next check retries it.
+const notified = async (html) => (await tgNotify(html)) || !tgReady();
 
 function advanceReminder(r) {
   const step = { hourly: 3600e3, daily: 86400e3, weekly: 604800e3 }[r.freq];
@@ -434,8 +453,8 @@ function noteReminderMessage(n) {
   if (body && body !== title) msg += `\n${escHtml(body.slice(0, 800))}`;
   const openItems = (n.checklist || []).filter((c) => !c.done);
   if (openItems.length) msg += '\n' + openItems.map((c) => `☐ ${escHtml(c.text)}`).join('\n');
-  if (tagNames.length) msg += `\n🏷 ${tagNames.map((t) => '#' + t).join(' ')}`;
-  if (n.reminder.freq !== 'once') msg += `\n🔁 repeats ${n.reminder.freq}`;
+  if (tagNames.length) msg += `\n🏷 ${tagNames.map((t) => '#' + escHtml(t)).join(' ')}`;
+  if (n.reminder.freq !== 'once') msg += `\n🔁 repeats ${escHtml(n.reminder.freq)}`;
   return msg;
 }
 
@@ -445,7 +464,7 @@ async function checkReminders() {
   for (const n of db.notes) {
     const r = n.reminder;
     if (r && r.enabled && new Date(r.at).getTime() <= now) {
-      await tgNotify(noteReminderMessage(n));
+      if (!(await notified(noteReminderMessage(n)))) continue;
       advanceReminder(r);
       changed = true;
     }
@@ -453,8 +472,8 @@ async function checkReminders() {
   for (const rem of db.reminders) {
     if (rem.enabled && new Date(rem.at).getTime() <= now) {
       let msg = `⏰ <b>${escHtml(rem.text)}</b>`;
-      if (rem.freq !== 'once') msg += `\n🔁 repeats ${rem.freq}`;
-      await tgNotify(msg);
+      if (rem.freq !== 'once') msg += `\n🔁 repeats ${escHtml(rem.freq)}`;
+      if (!(await notified(msg))) continue;
       advanceReminder(rem);
       changed = true;
     }
@@ -475,13 +494,15 @@ async function checkReminders() {
     const lastActivity = c.lastDrink ? new Date(c.lastDrink).getTime() : windowStart.getTime();
     const lastRem = c.lastReminded ? new Date(c.lastReminded).getTime() : 0;
     if (now - lastActivity >= TWO_H && now - lastRem >= TWO_H) {
-      await tgNotify(`💧 <b>Time to drink water!</b>\nYou've had ${c.cups || 0} of ${c.goal || 8} cups today.`);
+      if (!(await notified(`💧 <b>Time to drink water!</b>\nYou've had ${escHtml(c.cups || 0)} of ${escHtml(c.goal || 8)} cups today.`))) continue;
       c.lastReminded = new Date(now).toISOString();
       changed = true;
     }
   }
   if (changed) saveDb(db);
 }
-setInterval(() => checkReminders().catch((e) => console.error('Reminder check error:', e.message)), 30 * 1000);
+const runReminderCheck = () => checkReminders().catch((e) => console.error('Reminder check error:', e.message));
+runReminderCheck(); // reminders that came due while the server was down go out now, not 30 s later
+setInterval(runReminderCheck, 30 * 1000);
 
 app.listen(PORT, () => console.log(`MindBoard running at http://localhost:${PORT}`));

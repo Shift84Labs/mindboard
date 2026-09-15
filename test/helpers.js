@@ -21,13 +21,13 @@ function freePort() {
   });
 }
 
-// Boot server.js against dataDir. Resolves { base } once the API answers, or
-// { exitCode } if the process dies first. The process is killed when the test ends.
-async function boot(t, dataDir) {
+// Boot server.js against dataDir, with optional env overrides. Resolves { base } once the
+// API answers, or { exitCode } if the process dies first. The process is killed when the test ends.
+async function boot(t, dataDir, env = {}) {
   const port = await freePort();
   const base = `http://127.0.0.1:${port}`;
   const child = spawn(process.execPath, [SERVER], {
-    env: { ...process.env, DATA_DIR: dataDir, PORT: String(port), TELEGRAM_BOT_TOKEN: '' },
+    env: { ...process.env, DATA_DIR: dataDir, PORT: String(port), TELEGRAM_BOT_TOKEN: '', ...env },
     stdio: 'ignore',
   });
   t.after(() => child.kill());

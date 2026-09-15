@@ -90,6 +90,8 @@ uploads in `./data/uploads/`.
 | `PORT` | `3113` | HTTP port |
 | `DATA_DIR` | `./data` | Where notes, uploads and settings are stored |
 | `TELEGRAM_BOT_TOKEN` | *(unset)* | Enables the Telegram bridge when set |
+| `TELEGRAM_ALLOWED_CHAT_ID` | *(unset)* | The only chat the bot accepts and notifies. If unset, the bot locks to the first chat that messages it |
+| `TELEGRAM_API_URL` | `https://api.telegram.org` | Bot API base URL, for a self-hosted Bot API server |
 
 ## Docker
 
@@ -139,9 +141,15 @@ For a bind mount, run `sudo chown -R 1000:1000 ./data` on the host instead.
    copy the API token.
 2. Start MindBoard with `TELEGRAM_BOT_TOKEN` set (env var, or an `env_file` in
    your compose setup — don't commit the token).
-3. Send your bot any message. It replies with a 🔒 lock confirmation — from now
-   on only your chat can post to the board, and reminders/timer alerts are
-   delivered there.
+3. Set `TELEGRAM_ALLOWED_CHAT_ID` to your chat id so nobody else can use the
+   bot. To find the id, start MindBoard once with `TELEGRAM_ALLOWED_CHAT_ID=0`,
+   send the bot any message, and copy the id from the server log line
+   `Telegram: ignored a message from chat <id>`. Restart with the real id; from
+   then on only your chat can post to the board, and reminders and timer alerts
+   are delivered there.
+
+   Without `TELEGRAM_ALLOWED_CHAT_ID`, the bot locks itself to the first chat
+   that messages it, which is whoever finds the bot first.
 
 The bridge uses long polling, so it works behind NAT with **no public webhook,
 open ports, or reverse proxy required**.
