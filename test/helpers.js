@@ -39,31 +39,25 @@ function freePort() {
 }
 
 // Boot server.js against dataDir, with optional env overrides. Resolves { base } once the
-// API answers, or { exitCode } if the process dies first. The process is killed when the test ends.
+// server is listening, or { exitCode } if the process dies first. The process is killed when the test ends.
+// The server picks its own port (PORT=0) and reports it: a port found free here could be taken by
+// a test file running in parallel before the server binds it, and the test would talk to that server.
 async function boot(t, dataDir, env = {}) {
-  const port = await freePort();
-  const base = `http://127.0.0.1:${port}`;
   const child = spawn(process.execPath, [SERVER], {
-    env: { ...process.env, DATA_DIR: dataDir, PORT: String(port), TELEGRAM_BOT_TOKEN: '', ...env },
-    stdio: 'ignore',
+    env: { ...process.env, DATA_DIR: dataDir, PORT: '0', TELEGRAM_BOT_TOKEN: '', ...env },
+    stdio: ['ignore', 'pipe', 'ignore'],
   });
   servers.set(t, (servers.get(t) || new Set()).add(child));
   t.after(() => stopServers(t));
-  let done = false;
   const exited = new Promise((resolve) => child.on('exit', (code) => resolve({ exitCode: code })));
-  const answered = (async () => {
-    while (!done) {
-      try {
-        await fetch(base + '/api/notes');
-        return { base };
-      } catch {
-        await new Promise((r) => setTimeout(r, 50));
-      }
-    }
-  })();
-  const result = await Promise.race([exited, answered]);
-  done = true;
-  return result;
+  const listening = new Promise((resolve) => {
+    let out = '';
+    child.stdout.on('data', (chunk) => {
+      const port = (out += chunk).match(/running at http:\/\/localhost:(\d+)/)?.[1];
+      if (port) resolve({ base: `http://127.0.0.1:${port}` });
+    });
+  });
+  return Promise.race([exited, listening]);
 }
 
 module.exports = { tmpDataDir, boot, freePort };

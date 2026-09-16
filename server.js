@@ -545,4 +545,4 @@ const runReminderCheck = () => checkReminders().catch((e) => console.error('Remi
 runReminderCheck(); // reminders that came due while the server was down go out now, not 30 s later
 setInterval(runReminderCheck, 30 * 1000);
 
-app.listen(PORT, () => console.log(`MindBoard running at http://localhost:${PORT}`));
+const server = app.listen(PORT, () => console.log(`MindBoard running at http://localhost:${server.address().port}`));
