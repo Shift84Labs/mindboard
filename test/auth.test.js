@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const { tmpDataDir, boot } = require('./helpers');
+const { upsertUser } = require('../auth');
 
 const HEADER = 'x-auth-request-email';
 
@@ -73,4 +74,41 @@ test('writes driven by another site are refused', { timeout: 10000 }, async (t) 
     method: 'POST', headers: { ...headers, Origin: base }, body,
   });
   assert.equal(sameSite.status, 200);
+});
+
+test('emails that differ only in punctuation are different users', { timeout: 10000 }, async (t) => {
+  const { base } = await boot(t, tmpDataDir(t), {
+    AUTH_MODE: 'proxy', AUTH_TRUSTED_PROXIES: '127.0.0.1/32',
+  });
+  const me = async (email) => (await (await fetch(base + '/api/me', { headers: { [HEADER]: email } })).json()).user;
+  const plus = await me('a+b@example.test');
+  const underscore = await me('a_b@example.test');
+  assert.notEqual(plus.id, underscore.id);
+});
+
+function memoryStore(users) {
+  const db = { users };
+  return { db, getDb: () => db, save: () => {} };
+}
+
+test('an OIDC login with an unverified email cannot take over an existing account', () => {
+  const store = memoryStore([
+    { id: 'owner1', subject: 'sub-owner', email: 'brent@example.test', displayName: 'Brent', role: 'admin' },
+    { id: 'proxy1', subject: null, email: 'sarah@example.test', displayName: 'Sarah', role: 'user' },
+  ]);
+  const a = upsertUser(store, { subject: 'sub-attacker', email: 'brent@example.test', emailVerified: true });
+  const b = upsertUser(store, { subject: 'sub-attacker2', email: 'sarah@example.test', emailVerified: false });
+  assert.notEqual(a.id, 'owner1', 'a verified email must not override an account that has its own subject');
+  assert.notEqual(b.id, 'proxy1', 'an unverified email must not claim a proxy-created account');
+  assert.equal(store.db.users.length, 4);
+});
+
+test('an OIDC login with a verified email links the matching proxy-created account', () => {
+  const store = memoryStore([
+    { id: 'proxy1', subject: null, email: 'brent@example.test', displayName: 'Brent', role: 'admin' },
+  ]);
+  const user = upsertUser(store, { subject: 'sub-brent', email: 'Brent@Example.test', emailVerified: true });
+  assert.equal(user.id, 'proxy1');
+  assert.equal(store.db.users[0].subject, 'sub-brent');
+  assert.equal(upsertUser(store, { subject: 'sub-brent', email: 'new@example.test' }).id, 'proxy1', 'later logins match by subject');
 });

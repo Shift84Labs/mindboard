@@ -7,6 +7,7 @@
 //
 // Phase 1 only decides WHO you are: every signed-in user still shares one board. Per-user boards
 // arrive with ownerId in phase 2.
+const crypto = require('node:crypto');
 const net = require('node:net');
 
 const MODES = ['none', 'proxy', 'oidc'];
@@ -100,12 +101,27 @@ function allowed(cfg, { email, groups }) {
   return true;
 }
 
-// users are recorded now so phase 2 has owners to attach data to; the first one in is the admin
-function upsertUser(store, { subject, email, displayName }) {
+// A user's id owns their board, so an identity must never resolve to someone else's record.
+// A proxy vouches for the email, so proxy users match by email. An OIDC user matches by subject;
+// an email is only as good as the provider's word for it, so it can link an account the proxy
+// created (no subject yet) only when the provider marks it verified.
+function findUser(users, { subject, email, emailVerified }) {
+  if (!subject) return users.find((u) => u.email === email);
+  return users.find((u) => u.subject === subject)
+    || (emailVerified === true && email ? users.find((u) => !u.subject && u.email === email) : undefined);
+}
+
+// the first user in is the admin
+function upsertUser(store, { subject, email, emailVerified, displayName }) {
   const db = store.getDb();
   db.users = db.users || [];
-  const existing = db.users.find((u) => (subject && u.subject === subject) || (email && u.email === email));
+  email = email ? String(email).toLowerCase() : null;
+  const existing = findUser(db.users, { subject, email, emailVerified });
   if (existing) {
+    if (subject && !existing.subject) {
+      existing.subject = subject;
+      store.save();
+    }
     const name = displayName || existing.displayName;
     if (existing.email !== email || existing.displayName !== name) {
       existing.email = email || existing.email;
@@ -114,8 +130,9 @@ function upsertUser(store, { subject, email, displayName }) {
     }
     return existing;
   }
+  // random, never derived from the email or subject: a+b@x and a_b@x must not share a board
   const user = {
-    id: String(subject || email || 'user').replace(/[^A-Za-z0-9_.@-]/g, '_').slice(0, 64),
+    id: crypto.randomUUID(),
     subject: subject || null,
     email: email || null,
     displayName: displayName || email || 'User',
@@ -216,6 +233,7 @@ function attach(app, store, env = process.env) {
         req.session.user = publicUser(upsertUser(store, {
           subject: claims.sub,
           email: claims.email,
+          emailVerified: claims.email_verified,
           displayName: claims.name || claims.preferred_username,
         }));
         res.redirect('/');
@@ -254,4 +272,4 @@ function attach(app, store, env = process.env) {
   return cfg;
 }
 
-module.exports = { attach, readConfig, LOCAL_USER };
+module.exports = { attach, readConfig, upsertUser, LOCAL_USER };
