@@ -97,9 +97,11 @@ function validateWrite(req, res, next) {
 // ---------- middleware ----------
 app.disable('x-powered-by');
 // the UI has no inline scripts, so markup injected into a page can't run script
-// (uploads replace this with their own sandbox policy)
+// (uploads replace this with their own sandbox policy). frame-ancestors 'none' keeps the board out
+// of other sites' frames, so a logged-in session cannot be clickjacked; to embed display.html in a
+// dashboard, replace 'none' with the dashboard's origin
 app.use((req, res, next) => {
-  res.set('Content-Security-Policy', "script-src 'self'; object-src 'none'; base-uri 'none'");
+  res.set('Content-Security-Policy', "script-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'");
   next();
 });
 app.use(express.json({ limit: '5mb' }));

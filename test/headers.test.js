@@ -15,6 +15,13 @@ test('pages only allow same-origin scripts', { timeout: 10000 }, async (t) => {
   assert.deepEqual(scriptSrc, ['script-src', "'self'"]);
 });
 
+test('pages refuse to be framed by other sites', { timeout: 10000 }, async (t) => {
+  const res = await fetchFromServer(t, '/');
+  const policy = res.headers.get('content-security-policy') || '';
+  const frameAncestors = policy.split(';').map((d) => d.trim().split(/\s+/)).find(([name]) => name === 'frame-ancestors');
+  assert.deepEqual(frameAncestors, ['frame-ancestors', "'none'"]);
+});
+
 test('responses do not advertise Express', { timeout: 10000 }, async (t) => {
   const res = await fetchFromServer(t, '/api/notes');
   assert.equal(res.headers.get('x-powered-by'), null);
