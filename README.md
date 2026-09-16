@@ -92,6 +92,28 @@ uploads in `./data/uploads/`.
 | `TELEGRAM_BOT_TOKEN` | *(unset)* | Enables the Telegram bridge when set |
 | `TELEGRAM_ALLOWED_CHAT_ID` | *(unset)* | The only chat the bot accepts and notifies. If unset, the bot locks to the first chat that messages it |
 | `TELEGRAM_API_URL` | `https://api.telegram.org` | Bot API base URL, for a self-hosted Bot API server |
+| `AUTH_MODE` | `none` | `none` keeps the board open (unchanged behaviour), `proxy` trusts an identity header from your reverse proxy, `oidc` signs people in with an OIDC provider |
+| `AUTH_TRUSTED_PROXIES` | *(unset)* | **Required for `proxy`**: comma-separated CIDRs allowed to set the identity header. Without it the server refuses to start |
+| `AUTH_PROXY_HEADER` | `x-auth-request-email` | Header carrying the signed-in user in `proxy` mode |
+| `AUTH_ALLOWED_EMAILS` | *(unset)* | Optional allowlist of email addresses |
+| `AUTH_ALLOWED_GROUPS` | *(unset)* | Optional allowlist matched against the OIDC `groups` claim |
+| `OIDC_ISSUER_URL` | *(unset)* | Required for `oidc`, e.g. `https://id.example.com` |
+| `OIDC_CLIENT_ID` / `OIDC_CLIENT_SECRET` | *(unset)* | Required for `oidc` |
+| `OIDC_REDIRECT_URI` | *(unset)* | Required for `oidc`: must be `https://your-host/auth/callback` |
+| `OIDC_SCOPE` | `openid email profile` | Scopes requested at login. Add `groups` to use `AUTH_ALLOWED_GROUPS` |
+| `SESSION_SECRET` | *(unset)* | Required for `oidc`: signs the session cookie. Changing it signs everyone out |
+| `SESSION_COOKIE_SECURE` | `true` | Set to `false` only when testing over plain HTTP |
+
+### Signing in
+
+Login is **off by default**, so upgrading changes nothing. Turn it on one of two ways:
+
+- **`proxy`**: you already run oauth2-proxy, Authelia or similar. It authenticates, and MindBoard reads the user from a header. The header counts only when the request comes from `AUTH_TRUSTED_PROXIES`, because otherwise any client could claim to be anyone.
+- **`oidc`**: MindBoard itself redirects to your provider (authorization code with PKCE) and keeps a signed session cookie for 7 days.
+
+`GET /healthz` never requires a login, so uptime checks can tell "down" apart from "not signed in". `GET /api/me` reports the current mode and user.
+
+Today every signed-in person shares one board; per-user boards are the next step.
 
 ## Docker
 

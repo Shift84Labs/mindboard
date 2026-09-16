@@ -8,7 +8,9 @@
     "test": "node --test test/*.test.js"
   },
   "dependencies": {
+    "cookie-session": "^2.1.1",
     "express": "^4.19.2",
-    "multer": "^2.0.1"
+    "multer": "^2.0.1",
+    "openid-client": "^6.8.8"
   }
 }

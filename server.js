@@ -3,6 +3,7 @@ const multer = require('multer');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const auth = require('./auth');
 
 const app = express();
 const PORT = process.env.PORT || 3113;
@@ -105,6 +106,9 @@ app.use((req, res, next) => {
   next();
 });
 app.use(express.json({ limit: '5mb' }));
+// identity, plus the cross-origin write guard. A no-op sign-in when AUTH_MODE is unset, which is
+// the default, so existing installs behave exactly as before.
+auth.attach(app, { getDb: () => db, save: () => saveDb(db) });
 app.use('/api/:kind', validateWrite);
 app.use(express.static(path.join(__dirname, 'public')));
 // uploads are user content: never let a browser run one as a page or a script
