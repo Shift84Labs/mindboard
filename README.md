@@ -113,7 +113,13 @@ Login is **off by default**, so upgrading changes nothing. Turn it on one of two
 
 `GET /healthz` never requires a login, so uptime checks can tell "down" apart from "not signed in". `GET /api/me` reports the current mode and user.
 
-Today every signed-in person shares one board; per-user boards are the next step.
+### Per-user boards
+
+With sign-in on, every account gets its own board: notes, tags, widgets, reminders and uploaded images. Another account's items answer 404, images included. The first account to sign in is the admin. With `AUTH_MODE=none` there is a single board that shows everything, so turning sign-in off never hides data.
+
+**Upgrading with sign-in on:** at startup, or at the first sign-in if nobody has signed in yet, everything saved before per-user boards (or while sign-in was off) is given to the admin. `db.json` is copied to `db.json.bak_pre_owner_<timestamp>` first, and the log line lists what moved. Rolling back loses nothing, but an older version ignores `ownerId` and shows every account's items on one board.
+
+**Telegram serves the admin's board for now.** Messages to the bot land on the admin's board, and only the admin's reminders and timer alerts are sent. Other accounts' alerts are skipped, as if no bot were configured.
 
 ## Docker
 
@@ -178,9 +184,9 @@ open ports, or reverse proxy required**.
 
 ## Security notes
 
-- MindBoard has **no built-in authentication.** Run it on a trusted network,
-  behind a VPN (Tailscale/WireGuard), or behind an authenticating reverse
-  proxy — do not expose it directly to the internet.
+- **Sign-in is off by default.** With `AUTH_MODE=none`, anyone who can reach
+  the port has the whole board. Keep it on a trusted network or a VPN
+  (Tailscale/WireGuard), or turn on `proxy` or `oidc` sign-in before exposing it.
 - The `data/` directory contains all of your notes, uploaded images, and your
   Telegram chat id. It is gitignored for a reason — never commit it.
 

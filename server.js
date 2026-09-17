@@ -31,6 +31,8 @@ function loadDb() {
     db.widgets = db.widgets || [];
     db.settings = db.settings || {};
     db.reminders = db.reminders || [];
+    db.users = db.users || [];
+    db.uploads = db.uploads || [];
     return db;
   } catch (e) {
     // corrupt or unreadable: starting empty would let the next save overwrite the real file
@@ -38,7 +40,7 @@ function loadDb() {
       console.error(`Cannot load ${DB_FILE}: ${e.message}`);
       process.exit(1);
     }
-    return { notes: [], tags: [], widgets: [], settings: {}, reminders: [] };
+    return { notes: [], tags: [], widgets: [], settings: {}, reminders: [], users: [], uploads: [] };
   }
 }
 function saveDb(db) {
@@ -108,9 +110,59 @@ app.use((req, res, next) => {
 app.use(express.json({ limit: '5mb' }));
 // identity, plus the cross-origin write guard. A no-op sign-in when AUTH_MODE is unset, which is
 // the default, so existing installs behave exactly as before.
-auth.attach(app, { getDb: () => db, save: () => saveDb(db) });
+const authCfg = auth.attach(app, {
+  getDb: () => db,
+  save: () => saveDb(db),
+  // the first sign-in creates the admin, who inherits everything saved before anyone signed in
+  userAdded: (user) => user.role === 'admin' && claimLegacyRows(),
+});
+
+// ---------- ownership ----------
+// Notes, tags, widgets, reminders and uploads each record an ownerId. With AUTH_MODE=none there is
+// one board and it shows every row, so turning sign-in off never hides anything. With sign-in on,
+// each user sees only their own rows; anyone else's answer 404, as if they did not exist.
+const OWNED = ['notes', 'tags', 'widgets', 'reminders', 'uploads'];
+const ownedBy = (userId, row) => authCfg.mode === 'none' || (!!row && row.ownerId === userId);
+const mine = (req) => (row) => ownedBy(req.user.id, row);
+const findMine = (req, rows) => rows.find((row) => row.id === req.params.id && mine(req)(row));
+// deletes answer the same whether the row was someone else's or never existed
+function removeMine(req, kind) {
+  const row = findMine(req, db[kind]);
+  if (row) db[kind] = db[kind].filter((r) => r !== row);
+  return row;
+}
+// the board that legacy rows and, until Telegram is mapped per user, the Telegram bridge belong to
+const adminId = () => (authCfg.mode === 'none' ? auth.LOCAL_USER.id : db.users.find((u) => u.role === 'admin')?.id);
+
+// Rows saved before per-user boards (no ownerId) or while sign-in was off (ownerId 'local') belong
+// to the admin once sign-in is on. Old versions ignore ownerId, so this changes nothing for them,
+// but db.json is copied first anyway.
+function claimLegacyRows() {
+  const owner = adminId();
+  if (authCfg.mode === 'none' || !owner) return;
+  const legacy = (row) => row.ownerId === undefined || row.ownerId === auth.LOCAL_USER.id;
+  const recorded = new Set(db.uploads.map((u) => u.file));
+  const files = fs.readdirSync(UPLOAD_DIR).filter((f) => !recorded.has(f));
+  const counts = Object.fromEntries(OWNED.map((kind) => [kind, db[kind].filter(legacy).length]));
+  counts.uploads += files.length;
+  if (!Object.values(counts).some(Boolean)) return;
+  const backup = `${DB_FILE}.bak_pre_owner_${new Date().toISOString().replace(/\D/g, '').slice(0, 14)}`;
+  if (fs.existsSync(DB_FILE)) fs.copyFileSync(DB_FILE, backup);
+  for (const kind of OWNED) for (const row of db[kind]) if (legacy(row)) row.ownerId = owner;
+  for (const file of files) db.uploads.push({ file, ownerId: owner });
+  saveDb(db);
+  console.log(`Assigned rows with no owner to user ${owner}: ${JSON.stringify(counts)} (backup: ${backup})`);
+}
+claimLegacyRows();
+
 app.use('/api/:kind', validateWrite);
 app.use(express.static(path.join(__dirname, 'public')));
+// an image is served only to the user who uploaded it
+app.use('/uploads', (req, res, next) => {
+  const entry = db.uploads.find((u) => '/' + u.file === req.path);
+  if (!ownedBy(req.user.id, entry)) return res.status(404).json({ error: 'Not found' });
+  next();
+});
 // uploads are user content: never let a browser run one as a page or a script
 app.use('/uploads', express.static(UPLOAD_DIR, {
   setHeaders: (res) => res.set({ 'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': 'sandbox' }),
@@ -134,16 +186,19 @@ const upload = multer({
 
 app.post('/api/upload', upload.single('image'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file' });
+  db.uploads.push({ file: req.file.filename, ownerId: req.user.id });
+  saveDb(db);
   res.json({ url: '/uploads/' + req.file.filename });
 });
 
 // ---------- notes ----------
-app.get('/api/notes', (req, res) => res.json(db.notes));
+app.get('/api/notes', (req, res) => res.json(db.notes.filter(mine(req))));
 
 app.post('/api/notes', (req, res) => {
   const now = new Date().toISOString();
   const note = {
     id: uid(),
+    ownerId: req.user.id,
     title: req.body.title || '',
     text: req.body.text || '',
     checklist: req.body.checklist || [],
@@ -162,7 +217,7 @@ app.post('/api/notes', (req, res) => {
 });
 
 app.put('/api/notes/:id', (req, res) => {
-  const note = db.notes.find((n) => n.id === req.params.id);
+  const note = findMine(req, db.notes);
   if (!note) return res.status(404).json({ error: 'Not found' });
   const fields = ['title', 'text', 'checklist', 'tags', 'color', 'textColor', 'images', 'pinned', 'reminder'];
   for (const f of fields) if (f in req.body) note[f] = req.body[f];
@@ -172,34 +227,33 @@ app.put('/api/notes/:id', (req, res) => {
 });
 
 app.delete('/api/notes/:id', (req, res) => {
-  const note = db.notes.find((n) => n.id === req.params.id);
+  const note = removeMine(req, 'notes');
   if (note) {
-    // clean up uploaded images belonging to this note
-    for (const url of note.images || []) {
-      const f = path.join(UPLOAD_DIR, path.basename(url));
-      fs.rm(f, { force: true }, () => {});
-    }
+    // clean up the note's images, but only ones this user uploaded: a note can name any upload URL
+    const files = (note.images || []).map((url) => path.basename(url))
+      .filter((file) => ownedBy(req.user.id, db.uploads.find((u) => u.file === file)));
+    for (const file of files) fs.rm(path.join(UPLOAD_DIR, file), { force: true }, () => {});
+    db.uploads = db.uploads.filter((u) => !files.includes(u.file));
+    saveDb(db);
   }
-  db.notes = db.notes.filter((n) => n.id !== req.params.id);
-  saveDb(db);
   res.json({ ok: true });
 });
 
 // ---------- tags ----------
-app.get('/api/tags', (req, res) => res.json(db.tags));
+app.get('/api/tags', (req, res) => res.json(db.tags.filter(mine(req))));
 
 app.post('/api/tags', (req, res) => {
   const name = String(req.body.name || '').trim().replace(/^#/, '').toUpperCase();
   if (!name) return res.status(400).json({ error: 'Name required' });
-  if (db.tags.some((t) => t.name === name)) return res.status(409).json({ error: 'Tag exists' });
-  const tag = { id: uid(), name, color: req.body.color || '#4ade80', pinned: !!req.body.pinned };
+  if (db.tags.some((t) => t.name === name && mine(req)(t))) return res.status(409).json({ error: 'Tag exists' });
+  const tag = { id: uid(), ownerId: req.user.id, name, color: req.body.color || '#4ade80', pinned: !!req.body.pinned };
   db.tags.push(tag);
   saveDb(db);
   res.json(tag);
 });
 
 app.put('/api/tags/:id', (req, res) => {
-  const tag = db.tags.find((t) => t.id === req.params.id);
+  const tag = findMine(req, db.tags);
   if (!tag) return res.status(404).json({ error: 'Not found' });
   if ('name' in req.body) tag.name = String(req.body.name).trim().replace(/^#/, '').toUpperCase();
   if ('color' in req.body) tag.color = req.body.color;
@@ -209,18 +263,21 @@ app.put('/api/tags/:id', (req, res) => {
 });
 
 app.delete('/api/tags/:id', (req, res) => {
-  db.tags = db.tags.filter((t) => t.id !== req.params.id);
-  for (const n of db.notes) n.tags = n.tags.filter((id) => id !== req.params.id);
-  saveDb(db);
+  const tag = removeMine(req, 'tags');
+  if (tag) {
+    for (const n of db.notes) n.tags = n.tags.filter((id) => id !== tag.id);
+    saveDb(db);
+  }
   res.json({ ok: true });
 });
 
 // ---------- widgets ----------
-app.get('/api/widgets', (req, res) => res.json(db.widgets));
+app.get('/api/widgets', (req, res) => res.json(db.widgets.filter(mine(req))));
 
 app.post('/api/widgets', (req, res) => {
   const widget = {
     id: uid(),
+    ownerId: req.user.id,
     type: req.body.type || 'clock',
     x: req.body.x ?? 20,
     y: req.body.y ?? 20,
@@ -235,7 +292,7 @@ app.post('/api/widgets', (req, res) => {
 });
 
 app.put('/api/widgets/:id', (req, res) => {
-  const widget = db.widgets.find((w) => w.id === req.params.id);
+  const widget = findMine(req, db.widgets);
   if (!widget) return res.status(404).json({ error: 'Not found' });
   const fields = ['x', 'y', 'w', 'h', 'z', 'config'];
   for (const f of fields) if (f in req.body) widget[f] = req.body[f];
@@ -244,18 +301,18 @@ app.put('/api/widgets/:id', (req, res) => {
 });
 
 app.delete('/api/widgets/:id', (req, res) => {
-  db.widgets = db.widgets.filter((w) => w.id !== req.params.id);
-  saveDb(db);
+  if (removeMine(req, 'widgets')) saveDb(db);
   res.json({ ok: true });
 });
 
 // ---------- standalone reminders ----------
-app.get('/api/reminders', (req, res) => res.json(db.reminders));
+app.get('/api/reminders', (req, res) => res.json(db.reminders.filter(mine(req))));
 
 app.post('/api/reminders', (req, res) => {
   if (!req.body.text || !req.body.at) return res.status(400).json({ error: 'text and at required' });
   const rem = {
     id: uid(),
+    ownerId: req.user.id,
     text: String(req.body.text),
     at: req.body.at,
     freq: req.body.freq || 'once',
@@ -267,7 +324,7 @@ app.post('/api/reminders', (req, res) => {
 });
 
 app.put('/api/reminders/:id', (req, res) => {
-  const rem = db.reminders.find((r) => r.id === req.params.id);
+  const rem = findMine(req, db.reminders);
   if (!rem) return res.status(404).json({ error: 'Not found' });
   for (const f of ['text', 'at', 'freq', 'enabled']) if (f in req.body) rem[f] = req.body[f];
   saveDb(db);
@@ -275,8 +332,7 @@ app.put('/api/reminders/:id', (req, res) => {
 });
 
 app.delete('/api/reminders/:id', (req, res) => {
-  db.reminders = db.reminders.filter((r) => r.id !== req.params.id);
-  saveDb(db);
+  if (removeMine(req, 'reminders')) saveDb(db);
   res.json({ ok: true });
 });
 
@@ -284,7 +340,7 @@ app.delete('/api/reminders/:id', (req, res) => {
 app.post('/api/notify', async (req, res) => {
   const text = String(req.body.text || '').slice(0, 500);
   if (!text) return res.status(400).json({ error: 'text required' });
-  const sent = await tgNotify(`⏱ <b>${escHtml(text)}</b>`);
+  const sent = await tgNotify(`⏱ <b>${escHtml(text)}</b>`, { ownerId: req.user.id });
   res.json({ ok: true, sent });
 });
 
@@ -309,9 +365,9 @@ async function tg(method, params) {
 }
 
 function telegramTag() {
-  let tag = db.tags.find((t) => t.name === 'TELEGRAM');
+  let tag = db.tags.find((t) => t.name === 'TELEGRAM' && ownedBy(adminId(), t));
   if (!tag) {
-    tag = { id: uid(), name: 'TELEGRAM', color: '#229ED9', pinned: false };
+    tag = { id: uid(), ownerId: adminId(), name: 'TELEGRAM', color: '#229ED9', pinned: false };
     db.tags.push(tag);
   }
   return tag;
@@ -325,6 +381,7 @@ async function tgDownloadPhoto(fileId) {
   const ext = path.extname(info.result.file_path) || '.jpg';
   const name = uid() + ext;
   fs.writeFileSync(path.join(UPLOAD_DIR, name), Buffer.from(await res.arrayBuffer()));
+  db.uploads.push({ file: name, ownerId: adminId() });
   return '/uploads/' + name;
 }
 
@@ -353,6 +410,7 @@ async function handleTgMessage(msg) {
   const now = new Date(msg.date ? msg.date * 1000 : Date.now()).toISOString();
   db.notes.unshift({
     id: uid(),
+    ownerId: adminId(),
     title: '',
     text,
     checklist: [],
@@ -447,11 +505,14 @@ function escHtml(s) {
 }
 
 const tgReady = () => !!TG_TOKEN && tgChats().length > 0;
+// Until Telegram is mapped per user, its chat belongs to the admin's board. Other users' reminders
+// and alerts have nowhere to go, the same as everyone's when no bot is configured.
+const tgReadyFor = (row) => tgReady() && ownedBy(adminId(), row);
 
 // resolves true only when every chat got the message; Telegram's rejections are logged
-async function tgNotify(html) {
-  if (!tgReady()) {
-    console.log('Notification (telegram not configured):', html.replace(/<[^>]+>/g, ''));
+async function tgNotify(html, row) {
+  if (!tgReadyFor(row)) {
+    console.log('Notification (no Telegram chat for this board):', html.replace(/<[^>]+>/g, ''));
     return false;
   }
   let delivered = true;
@@ -469,7 +530,7 @@ async function tgNotify(html) {
 
 // A due item is handled once it is delivered, or when Telegram isn't set up and there is
 // nowhere to deliver it. A failed send leaves it due, so the next check retries it.
-const notified = async (html) => (await tgNotify(html)) || !tgReady();
+const notified = async (row, html) => (await tgNotify(html, row)) || !tgReadyFor(row);
 
 function advanceReminder(r) {
   const step = { hourly: 3600e3, daily: 86400e3, weekly: 604800e3 }[r.freq];
@@ -504,7 +565,7 @@ async function checkReminders() {
   for (const n of db.notes) {
     const r = n.reminder;
     if (r && r.enabled && new Date(r.at).getTime() <= now) {
-      if (!(await notified(noteReminderMessage(n)))) continue;
+      if (!(await notified(n, noteReminderMessage(n)))) continue;
       advanceReminder(r);
       changed = true;
     }
@@ -513,7 +574,7 @@ async function checkReminders() {
     if (rem.enabled && new Date(rem.at).getTime() <= now) {
       let msg = `⏰ <b>${escHtml(rem.text)}</b>`;
       if (rem.freq !== 'once') msg += `\n🔁 repeats ${escHtml(rem.freq)}`;
-      if (!(await notified(msg))) continue;
+      if (!(await notified(rem, msg))) continue;
       advanceReminder(rem);
       changed = true;
     }
@@ -534,7 +595,7 @@ async function checkReminders() {
     const lastActivity = c.lastDrink ? new Date(c.lastDrink).getTime() : windowStart.getTime();
     const lastRem = c.lastReminded ? new Date(c.lastReminded).getTime() : 0;
     if (now - lastActivity >= TWO_H && now - lastRem >= TWO_H) {
-      if (!(await notified(`💧 <b>Time to drink water!</b>\nYou've had ${escHtml(c.cups || 0)} of ${escHtml(c.goal || 8)} cups today.`))) continue;
+      if (!(await notified(wdg, `💧 <b>Time to drink water!</b>\nYou've had ${escHtml(c.cups || 0)} of ${escHtml(c.goal || 8)} cups today.`))) continue;
       c.lastReminded = new Date(now).toISOString();
       changed = true;
     }

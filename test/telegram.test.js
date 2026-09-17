@@ -17,6 +17,7 @@ async function fakeTelegram(t, { updates = [], sendResult = { ok: true, result: 
     let raw = '';
     req.on('data', (chunk) => (raw += chunk));
     req.on('end', () => {
+      if (req.url.startsWith('/file/')) return res.end('photo bytes');
       const method = req.url.split('/').pop();
       const reply = (body) => res.end(JSON.stringify(body));
       if (method === 'getMe') return reply({ ok: true, result: { username: 'fake_bot' } });
@@ -25,6 +26,7 @@ async function fakeTelegram(t, { updates = [], sendResult = { ok: true, result: 
         pending = [];
         return setTimeout(() => reply({ ok: true, result }), result.length ? 0 : 100);
       }
+      if (method === 'getFile') return reply({ ok: true, result: { file_id: 'photo1', file_path: 'photos/file_1.jpg' } });
       if (method === 'sendMessage') {
         sent.push(JSON.parse(raw));
         return reply(sendResult);
@@ -152,4 +154,76 @@ test('without a bot token the board reports Telegram as disabled', { timeout: 15
   assert.ok(base, `server exited with ${exitCode}`);
 
   assert.equal((await telegramStatus(base))?.status, 'disabled');
+});
+
+// Until Telegram is mapped per user, the bridge serves the admin's board only
+const PROXY = { AUTH_MODE: 'proxy', AUTH_TRUSTED_PROXIES: '127.0.0.1/32' };
+const USERS = [
+  { id: 'admin-id', subject: null, email: 'brent@example.test', displayName: 'Brent', role: 'admin', createdAt: '2026-01-01T00:00:00.000Z' },
+  { id: 'other-id', subject: null, email: 'sarah@example.test', displayName: 'Sarah', role: 'user', createdAt: '2026-01-01T00:00:00.000Z' },
+];
+const signedIn = (email) => ({ headers: { 'x-auth-request-email': email, 'Content-Type': 'application/json' } });
+
+test('a Telegram message lands on the admin board only', { timeout: 15000 }, async (t) => {
+  const tg = await fakeTelegram(t, { updates: [{ update_id: 1, message: { chat: { id: OWNER }, date: 1, text: 'from owner' } }] });
+  const dir = tmpDataDir(t);
+  seedDb(dir, { users: USERS });
+  const { base, exitCode } = await boot(t, dir, { ...botEnv(tg), ...PROXY });
+  assert.ok(base, `server exited with ${exitCode}`);
+
+  assert.ok(await waitFor(() => tg.sent.length >= 1), 'the bridge did not confirm the message');
+  const notes = async (email) => (await (await fetch(base + '/api/notes', signedIn(email))).json()).map((n) => n.text);
+  assert.deepEqual(await notes('brent@example.test'), ['from owner']);
+  assert.deepEqual(await notes('sarah@example.test'), []);
+});
+
+test("another user's reminders are not sent to the admin's Telegram chat", { timeout: 15000 }, async (t) => {
+  const tg = await fakeTelegram(t);
+  const dir = tmpDataDir(t);
+  const due = '2026-01-01T00:00:00.000Z';
+  seedDb(dir, {
+    users: USERS,
+    // the scheduler walks these in order, so the other user's would be sent first
+    reminders: [
+      { id: 'cccccccccccccccc', text: 'sarah private', at: due, freq: 'once', enabled: true, ownerId: 'other-id' },
+      { id: 'dddddddddddddddd', text: 'brent reminder', at: due, freq: 'once', enabled: true, ownerId: 'admin-id' },
+    ],
+  });
+  const { base, exitCode } = await boot(t, dir, { ...botEnv(tg), ...PROXY });
+  assert.ok(base, `server exited with ${exitCode}`);
+
+  assert.ok(await waitFor(() => tg.sent.length >= 1), 'the admin reminder was never sent');
+  assert.deepEqual(tg.sent.map((m) => m.text), ['⏰ <b>brent reminder</b>']);
+});
+
+test("another user's timer alert is not sent to the admin's Telegram chat", { timeout: 15000 }, async (t) => {
+  const tg = await fakeTelegram(t);
+  const dir = tmpDataDir(t);
+  seedDb(dir, { users: USERS });
+  const { base, exitCode } = await boot(t, dir, { ...botEnv(tg), ...PROXY });
+  assert.ok(base, `server exited with ${exitCode}`);
+
+  const notify = async (email, text) => (await (await fetch(base + '/api/notify', {
+    method: 'POST', ...signedIn(email), body: JSON.stringify({ text }),
+  })).json()).sent;
+  assert.equal(await notify('sarah@example.test', 'sarah timer'), false);
+  assert.equal(await notify('brent@example.test', 'brent timer'), true);
+  assert.deepEqual(tg.sent.map((m) => m.text), ['⏱ <b>brent timer</b>']);
+});
+
+test('a photo sent to the bot is served to the admin only', { timeout: 15000 }, async (t) => {
+  const photo = [{ file_id: 'photo1', file_unique_id: 'u1', width: 90, height: 90 }];
+  const tg = await fakeTelegram(t, { updates: [{ update_id: 1, message: { chat: { id: OWNER }, date: 1, photo } }] });
+  const dir = tmpDataDir(t);
+  seedDb(dir, { users: USERS });
+  const { base, exitCode } = await boot(t, dir, { ...botEnv(tg), ...PROXY });
+  assert.ok(base, `server exited with ${exitCode}`);
+
+  assert.ok(await waitFor(() => tg.sent.length >= 1), 'the bridge did not confirm the photo');
+  const [note] = await (await fetch(base + '/api/notes', signedIn('brent@example.test'))).json();
+  const image = (email) => fetch(base + note.images[0], signedIn(email));
+  const own = await image('brent@example.test');
+  assert.equal(own.status, 200);
+  assert.equal(await own.text(), 'photo bytes');
+  assert.equal((await image('sarah@example.test')).status, 404);
 });

@@ -5,8 +5,8 @@
 //   proxy  trust an identity header from a reverse proxy, but only from AUTH_TRUSTED_PROXIES
 //   oidc   authorization code + PKCE against any OIDC provider (Pocket ID, Authelia, Keycloak)
 //
-// Phase 1 only decides WHO you are: every signed-in user still shares one board. Per-user boards
-// arrive with ownerId in phase 2.
+// Whoever signs in gets their own board: server.js keeps each user's rows apart by ownerId, so a
+// user's id must never resolve to anyone else.
 const crypto = require('node:crypto');
 const net = require('node:net');
 
@@ -141,6 +141,7 @@ function upsertUser(store, { subject, email, emailVerified, displayName }) {
   };
   db.users.push(user);
   store.save();
+  if (store.userAdded) store.userAdded(user);
   return user;
 }
 
