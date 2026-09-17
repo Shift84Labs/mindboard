@@ -59,8 +59,9 @@ async function telegramStatus(base) {
   return res && res.ok ? res.json() : null;
 }
 
+// performance.now(), not Date.now(): a wall clock that jumps (WSL2 does, by 10 s) ends the wait early
 async function waitFor(check, ms = 5000) {
-  for (const end = Date.now() + ms; Date.now() < end; ) {
+  for (const end = performance.now() + ms; performance.now() < end; ) {
     if (await check()) return true;
     await new Promise((r) => setTimeout(r, 50));
   }

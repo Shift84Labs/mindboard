@@ -7,10 +7,10 @@ const { tmpDataDir, boot } = require('./helpers');
 const HOUR = 3600e3;
 
 async function timedBoot(t, dir) {
-  const started = Date.now();
+  const started = performance.now(); // monotonic: the wall clock can jump mid-boot
   const { base, exitCode } = await boot(t, dir);
   assert.ok(base, `server exited with ${exitCode}`);
-  return { base, ms: Date.now() - started };
+  return { base, ms: performance.now() - started };
 }
 
 test('a repeating reminder far in the past is advanced without stalling the server', { timeout: 30000 }, async (t) => {
