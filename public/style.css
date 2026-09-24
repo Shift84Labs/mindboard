@@ -442,8 +442,11 @@ input, textarea, select { font-family: inherit; }
 }
 .pill-btn:hover { border-color: var(--accent); }
 .pill-btn.pinned-active { border-color: var(--accent); background: var(--accent-dim); }
-.tg-status, .tg-status:hover { color: var(--danger); border-color: var(--danger); cursor: help; }
+.tg-status { color: var(--muted); }
+.tg-status[data-state='connected'] { color: var(--text); }
+.tg-status[data-state='disconnected'], .tg-status[data-state='disconnected']:hover { color: var(--danger); border-color: var(--danger); }
 .tg-status[hidden] { display: none; }
+.settings-actions { display: flex; gap: 4px; flex-shrink: 0; }
 
 /* ============ widget palette ============ */
 .widget-palette[hidden] { display: none; }

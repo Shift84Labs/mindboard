@@ -58,8 +58,9 @@ Raspberry Pi, a home-lab Docker host, or your laptop.
 - A Telegram bot bridge delivers reminder notifications, timer-done alerts, and
   lets you **text notes onto the board** — messages (and photos) sent to your
   bot appear as notes tagged `#TELEGRAM`
-- The bot locks itself to the first chat that messages it — nobody else can
-  post to your board
+- Each account links its own chat from ⚙ Settings with a pairing code, so
+  messages land on the right board and reminders reach the right person.
+  Without sign-in, the bot locks itself to the first chat that messages it
 
 **UI**
 - ⚙ **Settings**: dark & light mode, font (Roboto, Roboto Mono, Courier) and
@@ -91,7 +92,7 @@ uploads in `./data/uploads/`.
 | `PORT` | `3113` | HTTP port |
 | `DATA_DIR` | `./data` | Where notes, uploads and settings are stored |
 | `TELEGRAM_BOT_TOKEN` | *(unset)* | Enables the Telegram bridge when set |
-| `TELEGRAM_ALLOWED_CHAT_ID` | *(unset)* | The only chat the bot accepts and notifies. If unset, the bot locks to the first chat that messages it |
+| `TELEGRAM_ALLOWED_CHAT_ID` | *(unset)* | A chat that always reaches the admin's board (the only board without sign-in). Other chats are linked from Settings. If unset and sign-in is off, the bot locks to the first chat that messages it |
 | `TELEGRAM_API_URL` | `https://api.telegram.org` | Bot API base URL, for a self-hosted Bot API server |
 | `AUTH_MODE` | `none` | `none` keeps the board open (unchanged behaviour), `proxy` trusts an identity header from your reverse proxy, `oidc` signs people in with an OIDC provider |
 | `AUTH_TRUSTED_PROXIES` | *(unset)* | **Required for `proxy`**: comma-separated CIDRs allowed to set the identity header. Without it the server refuses to start |
@@ -120,7 +121,7 @@ With sign-in on, every account gets its own board: notes, tags, widgets, reminde
 
 **Upgrading with sign-in on:** at startup, or at the first sign-in if nobody has signed in yet, everything saved before per-user boards (or while sign-in was off) is given to the admin. `db.json` is copied to `db.json.bak_pre_owner_<timestamp>` first, and the log line lists what moved. Rolling back loses nothing, but an older version ignores `ownerId` and shows every account's items on one board.
 
-**Telegram serves the admin's board for now.** Messages to the bot land on the admin's board, and only the admin's reminders and timer alerts are sent. Other accounts' alerts are skipped, as if no bot were configured.
+**Telegram is per account.** Each person links their own chat from ⚙ Settings (see below); messages from that chat land on their board, and their reminders and timer alerts go to that chat. `TELEGRAM_ALLOWED_CHAT_ID` and a chat locked before the upgrade keep reaching the admin's board. An account with no linked chat gets no alerts.
 
 ## Docker
 
@@ -170,15 +171,20 @@ For a bind mount, run `sudo chown -R 1000:1000 ./data` on the host instead.
    copy the API token.
 2. Start MindBoard with `TELEGRAM_BOT_TOKEN` set (env var, or an `env_file` in
    your compose setup — don't commit the token).
-3. Set `TELEGRAM_ALLOWED_CHAT_ID` to your chat id so nobody else can use the
-   bot. To find the id, start MindBoard once with `TELEGRAM_ALLOWED_CHAT_ID=0`,
-   send the bot any message, and copy the id from the server log line
-   `Telegram: ignored a message from chat <id>`. Restart with the real id; from
-   then on only your chat can post to the board, and reminders and timer alerts
-   are delivered there.
+3. Link your chat: open ⚙ Settings on the board, press **Link Telegram**, and
+   send the 6-character code to the bot (the link there opens the chat with the
+   code filled in; just press Start). The code lasts 10 minutes. From then on
+   messages from that chat land on your board, and your reminders and timer
+   alerts are delivered there. **Unlink** in Settings removes the mapping.
 
-   Without `TELEGRAM_ALLOWED_CHAT_ID`, the bot locks itself to the first chat
-   that messages it, which is whoever finds the bot first.
+   Every account links its own chat the same way. A chat nobody has linked is
+   told the bot is private and is logged as
+   `Telegram: refused a message from chat <id>`.
+
+   **Without sign-in** (`AUTH_MODE=none`) there is one board, and the bot also
+   locks itself to the first chat that messages it, as before. Set
+   `TELEGRAM_ALLOWED_CHAT_ID` to pin that chat instead of trusting whoever finds
+   the bot first.
 
 The bridge uses long polling, so it works behind NAT with **no public webhook,
 open ports, or reverse proxy required**.

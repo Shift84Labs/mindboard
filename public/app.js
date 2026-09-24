@@ -74,16 +74,11 @@ $('themeToggle').onclick = () => setPref('theme', prefs.theme === 'light' ? 'dar
 for (const [k, id] of Object.entries(PREF_INPUTS)) $(id).onchange = (e) => setPref(k, e.target.value);
 
 /* ============ settings ============ */
-const TG_LABELS = {
-  disabled: () => 'Off (no bot token)',
-  connecting: () => 'Connecting',
-  connected: () => 'Connected',
-  disconnected: (detail) => `Disconnected: ${detail}`,
-};
 async function openSettings() {
   for (const [k, id] of Object.entries(PREF_INPUTS)) $(id).value = prefs[k];
   $('settingsAccount').textContent = '';
   $('settingsStatus').innerHTML = '';
+  $('tgPairInfo').hidden = true;
   $('settingsModal').hidden = false;
   try {
     const [me, status] = await Promise.all([api.get('/api/me'), api.get('/api/status')]);
@@ -91,9 +86,8 @@ async function openSettings() {
       ? 'No sign-in: anyone who can reach this board can use it (AUTH_MODE=none)'
       : `${me.user.displayName} (${me.user.email || me.user.id}), ${me.user.role}`;
     $('signOutForm').hidden = me.mode !== 'oidc';
-    const tg = status.telegram;
+    renderTelegram(status.telegram);
     const rows = [
-      ['Telegram', (TG_LABELS[tg.status] || (() => tg.status))(tg.detail)],
       ['Notes', status.counts.notes], ['Tags', status.counts.tags], ['Widgets', status.counts.widgets],
       ['Reminders', status.counts.reminders], ['Images', status.counts.uploads],
       ['Version', status.version + (status.commit ? ` (${status.commit})` : '')],
@@ -107,19 +101,77 @@ $('settingsBtn').onclick = openSettings;
 $('closeSettings').onclick = () => { $('settingsModal').hidden = true; };
 
 /* ============ telegram status ============ */
-// the bridge reconnects on its own; this only warns that reminders can't reach Telegram right now
+const TG_LABELS = { disabled: 'off', connecting: 'connecting', connected: 'connected', disconnected: 'disconnected' };
+const TG_TEXT = {
+  disabled: () => 'Off: set TELEGRAM_BOT_TOKEN on the server to enable the bridge.',
+  connecting: () => 'Connecting to the Bot API.',
+  connected: (tg) => `Connected as @${tg.bot}.`,
+  disconnected: (tg) => `Disconnected: ${tg.detail}. The bridge reconnects on its own, and reminders are retried until it does.`,
+};
+// the pill shows every state; clicking it opens Settings, where the chat is linked
 async function refreshTelegramStatus() {
   try {
-    const { status, detail } = await api.get('/api/telegram');
+    const tg = await api.get('/api/telegram');
+    if (!tg.status) return;
     const pill = $('telegramStatus');
-    pill.hidden = status !== 'disconnected';
-    pill.title = `Telegram disconnected (${detail}). Reminders are retried until it reconnects.`;
+    pill.dataset.state = tg.status;
+    pill.querySelector('.btn-txt').textContent = 'Telegram ' + (TG_LABELS[tg.status] || tg.status);
+    pill.title = (TG_TEXT[tg.status] || (() => tg.status))(tg);
+    pill.hidden = false;
   } catch {
     // board server unreachable: leave the indicator as it was
   }
 }
 refreshTelegramStatus();
 setInterval(refreshTelegramStatus, 30 * 1000);
+$('telegramStatus').onclick = () => openSettings();
+
+function renderTelegram(tg) {
+  $('tgState').textContent = (TG_TEXT[tg.status] || (() => tg.status))(tg);
+  const on = tg.status !== 'disabled';
+  $('tgLinkRow').hidden = !on;
+  if (!on) return;
+  const linked = tg.chats.length > 0;
+  $('tgLinkText').textContent = linked
+    ? `Linked to chat ${tg.chats.join(', ')}: messages land on this board and its reminders go there.`
+    : 'Not linked: reminders and timer alerts have nowhere to go.';
+  $('tgLinkBtn').hidden = linked;
+  $('tgUnlinkBtn').hidden = !linked;
+  if (linked) $('tgPairInfo').hidden = true;
+}
+$('tgLinkBtn').onclick = async () => {
+  const info = $('tgPairInfo');
+  info.textContent = '';
+  info.hidden = false;
+  try {
+    const { code, bot, expiresAt } = await api.send('POST', '/api/telegram/pair');
+    const mins = Math.max(1, Math.round((Date.parse(expiresAt) - Date.now()) / 60000));
+    info.append(`In Telegram, send /start ${code} to ${bot ? '@' + bot : 'the bot'} within ${mins} minutes`);
+    if (bot) {
+      const a = document.createElement('a');
+      a.href = `https://t.me/${encodeURIComponent(bot)}?start=${encodeURIComponent(code)}`;
+      a.target = '_blank';
+      a.rel = 'noopener';
+      a.textContent = 'open the chat';
+      info.append(', or ', a, ' and press Start.');
+    }
+    // flip to "linked" as soon as the code arrives from the chat
+    const poll = setInterval(async () => {
+      if ($('settingsModal').hidden || info.hidden) return clearInterval(poll);
+      const status = await api.get('/api/status').catch(() => null);
+      if (status && status.telegram.chats.length) {
+        clearInterval(poll);
+        renderTelegram(status.telegram);
+      }
+    }, 3000);
+  } catch (e) {
+    info.textContent = e.message;
+  }
+};
+$('tgUnlinkBtn').onclick = async () => {
+  await api.send('DELETE', '/api/telegram/pair').catch(() => {});
+  openSettings();
+};
 
 /* ============ mobile / desktop layout mode ============ */
 const mobileQuery = matchMedia('(max-width: 820px)');

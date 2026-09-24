@@ -14,7 +14,7 @@
   <header class="topbar">
     <h1 class="logo">MindBoard</h1>
     <div class="topbar-actions">
-      <span id="telegramStatus" class="pill-btn tg-status" role="status" hidden>⚠ <span class="btn-txt">Telegram disconnected</span></span>
+      <button id="telegramStatus" class="pill-btn tg-status" title="Telegram bridge" hidden>✈ <span class="btn-txt">Telegram</span></button>
       <button id="widgetEditBtn" class="pill-btn" title="Add, move, resize or remove widgets">⊞ <span class="btn-txt">Edit Widgets</span></button>
       <a href="display.html" id="displayModeBtn" class="pill-btn" title="Open display mode (read-only, auto-refreshing)">📺 <span class="btn-txt">Display</span></a>
       <button id="themeToggle" class="icon-btn" title="Toggle light / dark mode">◐</button>
@@ -255,6 +255,19 @@
         <form id="signOutForm" method="post" action="/auth/logout" hidden>
           <button class="ghost-btn">Sign out</button>
         </form>
+      </div>
+
+      <div class="edit-section">
+        <span class="edit-label">Telegram</span>
+        <p id="tgState" class="settings-text"></p>
+        <div id="tgLinkRow" class="settings-row" hidden>
+          <span id="tgLinkText"></span>
+          <span class="settings-actions">
+            <button id="tgLinkBtn" class="ghost-btn">Link Telegram</button>
+            <button id="tgUnlinkBtn" class="ghost-btn" hidden>Unlink</button>
+          </span>
+        </div>
+        <p id="tgPairInfo" class="settings-text" hidden></p>
       </div>
 
       <div class="edit-section">
