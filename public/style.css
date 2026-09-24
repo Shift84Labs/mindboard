@@ -1244,3 +1244,10 @@ body.display-page .note-card:hover { transform: none; box-shadow: none; }
 
 /* context menu: bigger touch targets */
 :root[data-ui='mobile'] .ctx-item { font-size: 15px; padding: 11px 14px; }
+
+/* ============ settings modal ============ */
+.settings-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 0; font-size: 14px; }
+.settings-text { margin: 0 0 8px; font-size: 14px; }
+.settings-status { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; margin: 0; font-size: 14px; }
+.settings-status dt { color: var(--muted); }
+.settings-status dd { margin: 0; }

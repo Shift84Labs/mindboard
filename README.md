@@ -62,9 +62,10 @@ Raspberry Pi, a home-lab Docker host, or your laptop.
   post to your board
 
 **UI**
-- Dark & light mode, remembered per device
-- Font switcher: Roboto, Roboto Mono, Courier
-- Responsive mobile layout with auto-detection + manual 📱/🖥 override
+- ⚙ **Settings**: dark & light mode, font (Roboto, Roboto Mono, Courier) and
+  mobile/desktop layout, saved with the board so every device agrees; your
+  account; and a status panel with the Telegram bridge state, item counts,
+  version and deployed commit
 - 📺 **Display mode** — a read-only page that auto-refreshes every 5 minutes
   with Today / This Week / This Month / All filters, made for wall-mounted
   tablets and status screens
@@ -124,7 +125,7 @@ With sign-in on, every account gets its own board: notes, tags, widgets, reminde
 ## Docker
 
 ```bash
-docker build -t mindboard .
+docker build -t mindboard --build-arg APP_COMMIT=$(git rev-parse --short HEAD) .   # the commit shows in Settings
 docker run -d --name mindboard \
   -p 3113:3113 \
   -v mindboard_data:/app/data \

@@ -17,13 +17,8 @@
       <span id="telegramStatus" class="pill-btn tg-status" role="status" hidden>⚠ <span class="btn-txt">Telegram disconnected</span></span>
       <button id="widgetEditBtn" class="pill-btn" title="Add, move, resize or remove widgets">⊞ <span class="btn-txt">Edit Widgets</span></button>
       <a href="display.html" id="displayModeBtn" class="pill-btn" title="Open display mode (read-only, auto-refreshing)">📺 <span class="btn-txt">Display</span></a>
-      <select id="fontSelect" class="font-select" title="Dashboard font">
-        <option value="roboto">Roboto</option>
-        <option value="mono">Roboto Mono</option>
-        <option value="courier">Courier</option>
-      </select>
-      <button id="uiModeToggle" class="icon-btn" title="Switch mobile / desktop layout">📱</button>
       <button id="themeToggle" class="icon-btn" title="Toggle light / dark mode">◐</button>
+      <button id="settingsBtn" class="icon-btn" title="Settings">⚙</button>
     </div>
   </header>
 
@@ -218,6 +213,54 @@
         <button class="icon-btn" id="closeWidgetConfig" title="Close">✕</button>
       </div>
       <div id="widgetConfigBody"></div>
+    </div>
+  </div>
+
+  <!-- ===== settings modal ===== -->
+  <div id="settingsModal" class="modal-overlay" hidden>
+    <div class="modal">
+      <div class="modal-head">
+        <span class="modal-title">Settings</span>
+        <button class="icon-btn" id="closeSettings" title="Close">✕</button>
+      </div>
+
+      <div class="edit-section">
+        <span class="edit-label">Preferences</span>
+        <label class="settings-row">Theme
+          <select id="prefTheme" class="font-select">
+            <option value="dark">Dark</option>
+            <option value="light">Light</option>
+          </select>
+        </label>
+        <label class="settings-row">Font
+          <select id="prefFont" class="font-select">
+            <option value="roboto">Roboto</option>
+            <option value="mono">Roboto Mono</option>
+            <option value="courier">Courier</option>
+          </select>
+        </label>
+        <label class="settings-row">Layout
+          <select id="prefUi" class="font-select">
+            <option value="auto">Auto</option>
+            <option value="desktop">Desktop</option>
+            <option value="mobile">Mobile</option>
+          </select>
+        </label>
+        <p class="muted small">Saved with the board, so every device shows it the same way.</p>
+      </div>
+
+      <div class="edit-section">
+        <span class="edit-label">Account</span>
+        <p id="settingsAccount" class="settings-text"></p>
+        <form id="signOutForm" method="post" action="/auth/logout" hidden>
+          <button class="ghost-btn">Sign out</button>
+        </form>
+      </div>
+
+      <div class="edit-section">
+        <span class="edit-label">Status</span>
+        <dl id="settingsStatus" class="settings-status"></dl>
+      </div>
     </div>
   </div>
 

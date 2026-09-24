@@ -14,38 +14,48 @@ function fmtDate(iso) {
     d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 }
 
-// apply saved theme/font
-document.documentElement.dataset.theme = localStorage.getItem('mb-theme') || 'dark';
-document.documentElement.dataset.font = localStorage.getItem('mb-font') || 'roboto';
-
-// mobile / desktop layout mode (auto-detect + manual override)
+// theme, font and layout are the board's, shared with index.html through the server;
+// localStorage is only a cache so the first paint is right before the server answers
+const prefs = { theme: 'dark', font: 'roboto', ui: 'auto' };
+for (const k of Object.keys(prefs)) prefs[k] = localStorage.getItem('mb-' + k) || prefs[k];
 const mobileQuery = matchMedia('(max-width: 820px)');
-function detectMobile() {
-  return mobileQuery.matches;
-}
-mobileQuery.addEventListener('change', () => applyUiMode());
-function applyUiMode() {
-  const pref = localStorage.getItem('mb-ui') || 'auto';
-  const mode = pref === 'auto' ? (detectMobile() ? 'mobile' : 'desktop') : pref;
+const detectMobile = () => mobileQuery.matches;
+
+function applyPrefs() {
+  document.documentElement.dataset.theme = prefs.theme;
+  document.documentElement.dataset.font = prefs.font;
+  const mode = prefs.ui === 'auto' ? (detectMobile() ? 'mobile' : 'desktop') : prefs.ui;
   document.documentElement.dataset.ui = mode;
   const btn = $('uiModeToggle');
   if (btn) {
     btn.textContent = mode === 'mobile' ? '🖥' : '📱';
     btn.title = (mode === 'mobile' ? 'Switch to desktop layout' : 'Switch to mobile layout') +
-      (pref === 'auto' ? ' (currently auto-detected)' : '');
+      (prefs.ui === 'auto' ? ' (currently auto-detected)' : '');
   }
 }
+function setPref(key, value) {
+  prefs[key] = value;
+  localStorage.setItem('mb-' + key, value);
+  applyPrefs();
+  fetch('/api/prefs', {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ [key]: value }),
+  }).catch(() => {});
+}
+applyPrefs();
+mobileQuery.addEventListener('change', applyPrefs);
+window.addEventListener('resize', applyPrefs);
+fetch('/api/prefs').then((r) => r.json()).then((saved) => {
+  for (const k of Object.keys(prefs)) if (saved[k]) prefs[k] = saved[k];
+  for (const k of Object.keys(prefs)) localStorage.setItem('mb-' + k, prefs[k]);
+  applyPrefs();
+}).catch(() => {});
 document.addEventListener('DOMContentLoaded', () => {
   $('uiModeToggle').onclick = () => {
     const next = document.documentElement.dataset.ui === 'mobile' ? 'desktop' : 'mobile';
-    const auto = detectMobile() ? 'mobile' : 'desktop';
-    localStorage.setItem('mb-ui', next === auto ? 'auto' : next);
-    applyUiMode();
+    setPref('ui', next === (detectMobile() ? 'mobile' : 'desktop') ? 'auto' : next);
   };
-  applyUiMode();
+  applyPrefs();
 });
-window.addEventListener('resize', applyUiMode);
-applyUiMode();
 
 function periodStart(p) {
   const now = new Date();

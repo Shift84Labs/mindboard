@@ -42,23 +42,69 @@ function esc(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
-/* ============ theme & font ============ */
+/* ============ preferences: theme, font, layout ============ */
+// Saved on the server so every device showing this board agrees. localStorage is only a cache,
+// so the first paint has the right theme before the server answers.
+const PREF_INPUTS = { theme: 'prefTheme', font: 'prefFont', ui: 'prefUi' };
+const prefs = { theme: 'dark', font: 'roboto', ui: 'auto' };
+for (const k of Object.keys(prefs)) prefs[k] = localStorage.getItem('mb-' + k) || prefs[k];
+
 function applyPrefs() {
-  const theme = localStorage.getItem('mb-theme') || 'dark';
-  const font = localStorage.getItem('mb-font') || 'roboto';
-  document.documentElement.dataset.theme = theme;
-  document.documentElement.dataset.font = font;
-  $('fontSelect').value = font;
+  document.documentElement.dataset.theme = prefs.theme;
+  document.documentElement.dataset.font = prefs.font;
+  applyUiMode();
 }
-$('themeToggle').onclick = () => {
-  const next = document.documentElement.dataset.theme === 'light' ? 'dark' : 'light';
-  localStorage.setItem('mb-theme', next);
-  document.documentElement.dataset.theme = next;
+async function loadPrefs() {
+  try {
+    const saved = await api.get('/api/prefs');
+    for (const k of Object.keys(prefs)) if (saved[k]) prefs[k] = saved[k];
+  } catch {
+    // offline or signed out: keep the cached copy
+  }
+  for (const k of Object.keys(prefs)) localStorage.setItem('mb-' + k, prefs[k]);
+  applyPrefs();
+}
+function setPref(key, value) {
+  prefs[key] = value;
+  localStorage.setItem('mb-' + key, value);
+  applyPrefs();
+  api.send('PUT', '/api/prefs', { [key]: value }).catch(() => {});
+}
+$('themeToggle').onclick = () => setPref('theme', prefs.theme === 'light' ? 'dark' : 'light');
+for (const [k, id] of Object.entries(PREF_INPUTS)) $(id).onchange = (e) => setPref(k, e.target.value);
+
+/* ============ settings ============ */
+const TG_LABELS = {
+  disabled: () => 'Off (no bot token)',
+  connecting: () => 'Connecting',
+  connected: () => 'Connected',
+  disconnected: (detail) => `Disconnected: ${detail}`,
 };
-$('fontSelect').onchange = (e) => {
-  localStorage.setItem('mb-font', e.target.value);
-  document.documentElement.dataset.font = e.target.value;
-};
+async function openSettings() {
+  for (const [k, id] of Object.entries(PREF_INPUTS)) $(id).value = prefs[k];
+  $('settingsAccount').textContent = '';
+  $('settingsStatus').innerHTML = '';
+  $('settingsModal').hidden = false;
+  try {
+    const [me, status] = await Promise.all([api.get('/api/me'), api.get('/api/status')]);
+    $('settingsAccount').textContent = me.mode === 'none'
+      ? 'No sign-in: anyone who can reach this board can use it (AUTH_MODE=none)'
+      : `${me.user.displayName} (${me.user.email || me.user.id}), ${me.user.role}`;
+    $('signOutForm').hidden = me.mode !== 'oidc';
+    const tg = status.telegram;
+    const rows = [
+      ['Telegram', (TG_LABELS[tg.status] || (() => tg.status))(tg.detail)],
+      ['Notes', status.counts.notes], ['Tags', status.counts.tags], ['Widgets', status.counts.widgets],
+      ['Reminders', status.counts.reminders], ['Images', status.counts.uploads],
+      ['Version', status.version + (status.commit ? ` (${status.commit})` : '')],
+    ];
+    $('settingsStatus').innerHTML = rows.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('');
+  } catch {
+    $('settingsAccount').textContent = 'Could not reach the server';
+  }
+}
+$('settingsBtn').onclick = openSettings;
+$('closeSettings').onclick = () => { $('settingsModal').hidden = true; };
 
 /* ============ telegram status ============ */
 // the bridge reconnects on its own; this only warns that reminders can't reach Telegram right now
@@ -82,24 +128,9 @@ function detectMobile() {
 }
 mobileQuery.addEventListener('change', () => applyUiMode());
 function applyUiMode() {
-  const pref = localStorage.getItem('mb-ui') || 'auto';
-  const mode = pref === 'auto' ? (detectMobile() ? 'mobile' : 'desktop') : pref;
-  document.documentElement.dataset.ui = mode;
-  const btn = $('uiModeToggle');
-  if (btn) {
-    btn.textContent = mode === 'mobile' ? '🖥' : '📱';
-    btn.title = (mode === 'mobile' ? 'Switch to desktop layout' : 'Switch to mobile layout') +
-      (pref === 'auto' ? ' (currently auto-detected)' : '');
-  }
+  document.documentElement.dataset.ui = prefs.ui === 'auto' ? (detectMobile() ? 'mobile' : 'desktop') : prefs.ui;
 }
-$('uiModeToggle').onclick = () => {
-  const next = document.documentElement.dataset.ui === 'mobile' ? 'desktop' : 'mobile';
-  const auto = detectMobile() ? 'mobile' : 'desktop';
-  localStorage.setItem('mb-ui', next === auto ? 'auto' : next);
-  applyUiMode();
-};
 window.addEventListener('resize', applyUiMode);
-applyUiMode();
 
 /* ============ tag row ============ */
 function renderTagRow() {
@@ -602,10 +633,11 @@ function renderTagEditList() {
 
 /* ============ global ============ */
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') { closeNoteModal(); closeTagModal(); }
+  if (e.key === 'Escape') { closeNoteModal(); closeTagModal(); $('settingsModal').hidden = true; }
 });
 $('noteModal').addEventListener('mousedown', (e) => { if (e.target === $('noteModal')) closeNoteModal(); });
 $('tagModal').addEventListener('mousedown', (e) => { if (e.target === $('tagModal')) closeTagModal(); });
+$('settingsModal').addEventListener('mousedown', (e) => { if (e.target === $('settingsModal')) $('settingsModal').hidden = true; });
 
 /* ============ right-click context menus ============ */
 const ctxMenu = document.createElement('div');
@@ -750,4 +782,5 @@ async function loadData() {
 }
 
 applyPrefs();
+loadPrefs();
 loadData();
