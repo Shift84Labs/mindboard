@@ -33,6 +33,7 @@ function loadDb() {
     db.reminders = db.reminders || [];
     db.users = db.users || [];
     db.uploads = db.uploads || [];
+    db.prefs = db.prefs || {};
     return db;
   } catch (e) {
     // corrupt or unreadable: starting empty would let the next save overwrite the real file
@@ -40,7 +41,7 @@ function loadDb() {
       console.error(`Cannot load ${DB_FILE}: ${e.message}`);
       process.exit(1);
     }
-    return { notes: [], tags: [], widgets: [], settings: {}, reminders: [], users: [], uploads: [] };
+    return { notes: [], tags: [], widgets: [], settings: {}, reminders: [], users: [], uploads: [], prefs: {} };
   }
 }
 function saveDb(db) {
@@ -64,6 +65,7 @@ const isColor = (v) => isStr(v) && /^(#[0-9a-f]{6})?$/i.test(v); // '' means def
 const isDate = (v) => isStr(v) && Number.isFinite(Date.parse(v));
 const isId = (v) => isStr(v) && /^[0-9a-f]{16}$/.test(v);
 const arrayOf = (check) => (v) => Array.isArray(v) && v.every(check);
+const oneOf = (...allowed) => (v) => allowed.includes(v);
 
 const WRITE_CHECKS = {
   notes: {
@@ -86,7 +88,9 @@ const WRITE_CHECKS = {
     config: isObj,
   },
   reminders: { text: isStr, at: isDate, freq: (v) => FREQS.includes(v), enabled: isBool },
+  prefs: { theme: oneOf('dark', 'light'), font: oneOf('roboto', 'mono', 'courier'), ui: oneOf('auto', 'mobile', 'desktop') },
 };
+const PREF_DEFAULTS = { theme: 'dark', font: 'roboto', ui: 'auto' };
 
 function validateWrite(req, res, next) {
   if ((req.method !== 'POST' && req.method !== 'PUT') || !Object.hasOwn(WRITE_CHECKS, req.params.kind)) return next();
@@ -335,6 +339,30 @@ app.delete('/api/reminders/:id', (req, res) => {
   if (removeMine(req, 'reminders')) saveDb(db);
   res.json({ ok: true });
 });
+
+// ---------- preferences and status ----------
+// Theme, font and layout live on the server so every device showing a board agrees. Keyed by
+// user id; the AUTH_MODE=none board is the `local` user.
+const prefsOf = (userId) => (Object.hasOwn(db.prefs, userId) ? db.prefs[userId] : {});
+app.get('/api/prefs', (req, res) => res.json({ ...PREF_DEFAULTS, ...prefsOf(req.user.id) }));
+
+app.put('/api/prefs', (req, res) => {
+  const prefs = { ...prefsOf(req.user.id) };
+  for (const k of Object.keys(PREF_DEFAULTS)) if (k in req.body) prefs[k] = req.body[k];
+  db.prefs[req.user.id] = prefs;
+  saveDb(db);
+  res.json({ ...PREF_DEFAULTS, ...prefs });
+});
+
+// read-only, for the settings screen: what is deployed, whether Telegram works, and how much
+// of the caller's own data there is. APP_COMMIT is baked in by the Dockerfile.
+const VERSION = require('./package.json').version;
+app.get('/api/status', (req, res) => res.json({
+  version: VERSION,
+  commit: process.env.APP_COMMIT || null,
+  telegram: tgStatus,
+  counts: Object.fromEntries(OWNED.map((kind) => [kind, db[kind].filter(mine(req)).length])),
+}));
 
 // ---------- ad-hoc notification (used by the timer widget) ----------
 app.post('/api/notify', async (req, res) => {
