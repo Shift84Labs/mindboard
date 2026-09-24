@@ -360,7 +360,7 @@ const VERSION = require('./package.json').version;
 app.get('/api/status', (req, res) => res.json({
   version: VERSION,
   commit: process.env.APP_COMMIT || null,
-  telegram: tgStatus,
+  telegram: { ...tgStatus, chats: chatsOf(req.user.id) },
   counts: Object.fromEntries(OWNED.map((kind) => [kind, db[kind].filter(mine(req)).length])),
 }));
 
@@ -373,15 +373,45 @@ app.post('/api/notify', async (req, res) => {
 });
 
 // ---------- telegram bridge ----------
-// Messages sent to the bot become notes tagged #TELEGRAM. With TELEGRAM_ALLOWED_CHAT_ID set,
-// only that chat is accepted; otherwise the bot locks itself to the first chat that messages it.
+// Messages sent to the bot become notes tagged #TELEGRAM on the board of the user whose chat sent
+// them. A chat is linked to a user with a pairing code from Settings (settings.tgUsers maps chat
+// id to user id). TELEGRAM_ALLOWED_CHAT_ID, and without sign-in the first chat that messages
+// the bot, mean the admin's board, as they always have.
 const TG_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 const TG_ALLOWED = process.env.TELEGRAM_ALLOWED_CHAT_ID || '';
 // a self-hosted Bot API server can stand in for api.telegram.org
 const TG_API = process.env.TELEGRAM_API_URL || 'https://api.telegram.org';
 
-// chats the bot answers and notifies: the configured chat, or whichever chat claimed the lock
-const tgChats = () => (TG_ALLOWED ? [TG_ALLOWED] : db.settings.telegramChats || []);
+// chats that reach the admin's board without pairing: the configured chat, or the one that claimed the lock
+const legacyChats = () => (TG_ALLOWED ? [TG_ALLOWED] : db.settings.telegramChats || []).map(String);
+const tgUsers = () => db.settings.tgUsers || {};
+// every chat that belongs to a user's board
+function chatsOf(userId) {
+  const chats = Object.keys(tgUsers()).filter((chat) => tgUsers()[chat] === userId);
+  if (userId === adminId()) chats.push(...legacyChats());
+  return [...new Set(chats)];
+}
+// the board a row belongs to; without sign-in every row is the single board's
+const ownerOf = (row) => (authCfg.mode === 'none' ? auth.LOCAL_USER.id : row.ownerId);
+
+// Pairing codes live in memory: they expire in 10 minutes, and a restart simply voids them.
+// Sending the code from a chat is what proves the user controls that chat.
+const tgPairing = new Map(); // code -> { userId, expires }
+const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no 0/O or 1/I to misread
+app.post('/api/telegram/pair', (req, res) => {
+  if (!TG_TOKEN) return res.status(409).json({ error: 'Telegram is not configured' });
+  for (const [code, p] of tgPairing) if (p.userId === req.user.id || p.expires < Date.now()) tgPairing.delete(code);
+  const code = Array.from(crypto.randomBytes(6), (b) => CODE_ALPHABET[b % CODE_ALPHABET.length]).join('');
+  const expires = Date.now() + 10 * 60 * 1000;
+  tgPairing.set(code, { userId: req.user.id, expires });
+  res.json({ code, expiresAt: new Date(expires).toISOString(), bot: tgStatus.bot });
+});
+app.delete('/api/telegram/pair', (req, res) => {
+  const users = tgUsers();
+  for (const chat of Object.keys(users)) if (users[chat] === req.user.id) delete users[chat];
+  saveDb(db);
+  res.json({ ok: true });
+});
 
 async function tg(method, params) {
   const res = await fetch(`${TG_API}/bot${TG_TOKEN}/${method}`, {
@@ -392,16 +422,16 @@ async function tg(method, params) {
   return res.json();
 }
 
-function telegramTag() {
-  let tag = db.tags.find((t) => t.name === 'TELEGRAM' && ownedBy(adminId(), t));
+function telegramTag(owner) {
+  let tag = db.tags.find((t) => t.name === 'TELEGRAM' && ownedBy(owner, t));
   if (!tag) {
-    tag = { id: uid(), ownerId: adminId(), name: 'TELEGRAM', color: '#229ED9', pinned: false };
+    tag = { id: uid(), ownerId: owner, name: 'TELEGRAM', color: '#229ED9', pinned: false };
     db.tags.push(tag);
   }
   return tag;
 }
 
-async function tgDownloadPhoto(fileId) {
+async function tgDownloadPhoto(fileId, owner) {
   const info = await tg('getFile', { file_id: fileId });
   if (!info.ok) return null;
   const res = await fetch(`${TG_API}/file/bot${TG_TOKEN}/${info.result.file_path}`);
@@ -409,26 +439,51 @@ async function tgDownloadPhoto(fileId) {
   const ext = path.extname(info.result.file_path) || '.jpg';
   const name = uid() + ext;
   fs.writeFileSync(path.join(UPLOAD_DIR, name), Buffer.from(await res.arrayBuffer()));
-  db.uploads.push({ file: name, ownerId: adminId() });
+  db.uploads.push({ file: name, ownerId: owner });
   return '/uploads/' + name;
 }
 
+async function tgLinkChat(chatId, code) {
+  const pending = tgPairing.get(code);
+  if (!pending || pending.expires < Date.now()) return false;
+  tgPairing.delete(code);
+  (db.settings.tgUsers ||= {})[String(chatId)] = pending.userId;
+  saveDb(db);
+  const user = db.users.find((u) => u.id === pending.userId);
+  const board = user ? `${user.displayName}'s board` : 'the board';
+  await tg('sendMessage', { chat_id: chatId, text: `✅ Linked. Anything you send here lands on ${board} tagged #TELEGRAM, and its reminders come to this chat.` });
+  return true;
+}
+
+// whose board a chat posts to: the linked user, or the admin for the configured or locked chat
+const tgBoardOf = (chatId) => tgUsers()[String(chatId)] || (legacyChats().includes(String(chatId)) ? adminId() : null);
+
 async function handleTgMessage(msg) {
   const chatId = msg.chat.id;
-  if (!tgChats().length) {
+  const text = msg.text || msg.caption || '';
+  // a pairing code, sent by the t.me deep link as "/start CODE" or typed on its own
+  const code = text.trim().match(/^(?:\/start\s+)?([A-Za-z0-9]{6})$/);
+  if (code && await tgLinkChat(chatId, code[1].toUpperCase())) return;
+  if (/^\/start\b/.test(text.trim())) {
+    await tg('sendMessage', { chat_id: chatId, text: 'That pairing code is wrong or has expired. Get a new one from Settings on the board.' });
+    return;
+  }
+  let owner = tgBoardOf(chatId);
+  if (!owner && authCfg.mode === 'none' && !legacyChats().length && !Object.keys(tgUsers()).length) {
+    // no sign-in and no chat yet: the first chat claims the single board, as it always has
     db.settings.telegramChats = [chatId];
     saveDb(db);
     await tg('sendMessage', { chat_id: chatId, text: '🔒 MindBoard bot is now locked to this chat. Anything you send here lands on the board tagged #TELEGRAM.' });
+    owner = adminId();
   }
-  if (!tgChats().map(String).includes(String(chatId))) {
-    console.log(`Telegram: ignored a message from chat ${chatId}`);
-    await tg('sendMessage', { chat_id: chatId, text: 'This bot is private.' });
+  if (!owner) {
+    console.log(`Telegram: refused a message from chat ${chatId}, which is not linked to any board`);
+    await tg('sendMessage', { chat_id: chatId, text: 'This bot is private. To link it to your board, open Settings on the board and choose Link Telegram.' });
     return;
   }
-  const text = msg.text || msg.caption || '';
   const images = [];
   if (msg.photo && msg.photo.length) {
-    const url = await tgDownloadPhoto(msg.photo[msg.photo.length - 1].file_id);
+    const url = await tgDownloadPhoto(msg.photo[msg.photo.length - 1].file_id, owner);
     if (url) images.push(url);
   }
   if (!text.trim() && !images.length) {
@@ -438,11 +493,11 @@ async function handleTgMessage(msg) {
   const now = new Date(msg.date ? msg.date * 1000 : Date.now()).toISOString();
   db.notes.unshift({
     id: uid(),
-    ownerId: adminId(),
+    ownerId: owner,
     title: '',
     text,
     checklist: [],
-    tags: [telegramTag().id],
+    tags: [telegramTag(owner).id],
     color: '#229ED9',
     textColor: '',
     images,
@@ -455,8 +510,8 @@ async function handleTgMessage(msg) {
 }
 
 // bridge state for the board UI: disabled (no token), connecting, connected, or disconnected with a reason
-let tgStatus = { status: TG_TOKEN ? 'connecting' : 'disabled', detail: '' };
-const setTgStatus = (status, detail = '') => { tgStatus = { status, detail }; };
+let tgStatus = { status: TG_TOKEN ? 'connecting' : 'disabled', detail: '', bot: null };
+const setTgStatus = (status, detail = '') => { tgStatus = { ...tgStatus, status, detail }; };
 app.get('/api/telegram', (req, res) => res.json(tgStatus));
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -469,6 +524,7 @@ async function tgPollLoop() {
     try {
       const me = await tg('getMe');
       if (me.ok) {
+        tgStatus.bot = me.result.username;
         console.log(`Telegram bridge active as @${me.result.username}`);
         break;
       }
@@ -517,7 +573,11 @@ async function tgPollLoop() {
 }
 
 if (TG_TOKEN) {
-  if (!TG_ALLOWED) console.log('Telegram: TELEGRAM_ALLOWED_CHAT_ID is not set, so the bot locks to the first chat that messages it');
+  if (!TG_ALLOWED) {
+    console.log(authCfg.mode === 'none'
+      ? 'Telegram: TELEGRAM_ALLOWED_CHAT_ID is not set, so the bot locks to the first chat that messages it'
+      : 'Telegram: chats are linked to users with a pairing code from Settings');
+  }
   // nothing in the bridge may crash the server
   tgPollLoop().catch((e) => {
     setTgStatus('disconnected', failure(e));
@@ -532,19 +592,19 @@ function escHtml(s) {
   return String(s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
 }
 
-const tgReady = () => !!TG_TOKEN && tgChats().length > 0;
-// Until Telegram is mapped per user, its chat belongs to the admin's board. Other users' reminders
-// and alerts have nowhere to go, the same as everyone's when no bot is configured.
-const tgReadyFor = (row) => tgReady() && ownedBy(adminId(), row);
+// a row's alerts go to the chats linked to its board; a board with no chat has nowhere to send them
+const tgChatsFor = (row) => (TG_TOKEN ? chatsOf(ownerOf(row)) : []);
+const tgReadyFor = (row) => tgChatsFor(row).length > 0;
 
 // resolves true only when every chat got the message; Telegram's rejections are logged
 async function tgNotify(html, row) {
-  if (!tgReadyFor(row)) {
+  const chats = tgChatsFor(row);
+  if (!chats.length) {
     console.log('Notification (no Telegram chat for this board):', html.replace(/<[^>]+>/g, ''));
     return false;
   }
   let delivered = true;
-  for (const chatId of tgChats()) {
+  for (const chatId of chats) {
     try {
       const res = await tg('sendMessage', { chat_id: chatId, text: html, parse_mode: 'HTML' });
       if (!res.ok) throw new Error(res.description || 'rejected');

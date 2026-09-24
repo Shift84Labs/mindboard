@@ -8,8 +8,8 @@ const { tmpDataDir, boot, freePort } = require('./helpers');
 const OWNER = 111;
 const STRANGER = 999;
 
-// Minimal stand-in for the Bot API: hands out the queued updates once, records
-// every sendMessage and answers each send with sendResult.
+// Minimal stand-in for the Bot API: hands out the queued updates once (more can be pushed
+// while the server runs), records every sendMessage and answers each send with sendResult.
 async function fakeTelegram(t, { updates = [], sendResult = { ok: true, result: {} } } = {}) {
   const sent = [];
   let pending = updates;
@@ -39,7 +39,7 @@ async function fakeTelegram(t, { updates = [], sendResult = { ok: true, result: 
     server.closeAllConnections();
     server.close();
   });
-  return { url: `http://127.0.0.1:${server.address().port}`, sent };
+  return { url: `http://127.0.0.1:${server.address().port}`, sent, push: (u) => pending.push(u) };
 }
 
 function botEnv(tg) {
@@ -56,8 +56,8 @@ function seedDb(dir, data) {
   fs.writeFileSync(path.join(dir, 'db.json'), JSON.stringify(db));
 }
 
-async function telegramStatus(base) {
-  const res = await fetch(base + '/api/telegram').catch(() => null);
+async function telegramStatus(base, opts = {}) {
+  const res = await fetch(base + '/api/telegram', opts).catch(() => null);
   return res && res.ok ? res.json() : null;
 }
 
@@ -226,4 +226,92 @@ test('a photo sent to the bot is served to the admin only', { timeout: 15000 }, 
   assert.equal(own.status, 200);
   assert.equal(await own.text(), 'photo bytes');
   assert.equal((await image('sarah@example.test')).status, 404);
+});
+
+// ---- phase 4: a chat is linked to a user with a pairing code ----
+const SARAH_CHAT = 555;
+const signedInAs = (email) => ({ headers: { 'x-auth-request-email': email } });
+const readDb = (dir) => JSON.parse(fs.readFileSync(path.join(dir, 'db.json'), 'utf8'));
+let nextUpdate = 100;
+const message = (chatId, text) => ({ update_id: nextUpdate++, message: { chat: { id: chatId }, date: 1, text } });
+
+test('a chat linked with a pairing code posts to that user\'s board and gets that user\'s alerts', { timeout: 15000 }, async (t) => {
+  const tg = await fakeTelegram(t);
+  const dir = tmpDataDir(t);
+  seedDb(dir, { users: USERS });
+  const { base, exitCode } = await boot(t, dir, { TELEGRAM_BOT_TOKEN: 'test_token', TELEGRAM_API_URL: tg.url, ...PROXY });
+  assert.ok(base, `server exited with ${exitCode}`);
+  assert.ok(await waitFor(async () => (await telegramStatus(base, signedInAs('sarah@example.test')))?.status === 'connected'), 'bridge never connected');
+
+  const pair = await fetch(base + '/api/telegram/pair', { method: 'POST', ...signedInAs('sarah@example.test') });
+  assert.equal(pair.status, 200);
+  const { code, bot } = await pair.json();
+  assert.match(code, /^[A-Z0-9]{6}$/);
+  assert.equal(bot, 'fake_bot');
+
+  tg.push(message(SARAH_CHAT, `/start ${code}`));
+  assert.ok(await waitFor(() => tg.sent.some((m) => m.chat_id === SARAH_CHAT && /linked/i.test(m.text))), 'no link confirmation');
+  assert.deepEqual(readDb(dir).settings.tgUsers, { [SARAH_CHAT]: 'other-id' });
+
+  tg.push(message(SARAH_CHAT, 'from sarah'));
+  assert.ok(await waitFor(() => tg.sent.some((m) => m.chat_id === SARAH_CHAT && /added/i.test(m.text))), 'message not confirmed');
+  const notes = async (email) => (await (await fetch(base + '/api/notes', signedInAs(email))).json()).map((n) => n.text);
+  assert.deepEqual(await notes('sarah@example.test'), ['from sarah']);
+  assert.deepEqual(await notes('brent@example.test'), []);
+
+  // alerts follow the row owner: Sarah's timer reaches her chat, the admin's has no chat and goes nowhere
+  const notify = async (email, text) => (await (await fetch(base + '/api/notify', {
+    method: 'POST', headers: { ...signedInAs(email).headers, 'Content-Type': 'application/json' }, body: JSON.stringify({ text }),
+  })).json()).sent;
+  assert.equal(await notify('sarah@example.test', 'sarah timer'), true);
+  assert.equal(await notify('brent@example.test', 'brent timer'), false);
+  assert.deepEqual(tg.sent.filter((m) => /timer/.test(m.text)).map((m) => [String(m.chat_id), m.text]), [[String(SARAH_CHAT), '⏱ <b>sarah timer</b>']]);
+
+  const status = await (await fetch(base + '/api/status', signedInAs('sarah@example.test'))).json();
+  assert.deepEqual(status.telegram.chats, [String(SARAH_CHAT)]);
+  assert.equal(status.telegram.bot, 'fake_bot');
+});
+
+test('unlinking a chat stops its messages and alerts', { timeout: 15000 }, async (t) => {
+  const tg = await fakeTelegram(t);
+  const dir = tmpDataDir(t);
+  seedDb(dir, { users: USERS, settings: { tgUsers: { [SARAH_CHAT]: 'other-id' } } });
+  const { base, exitCode } = await boot(t, dir, { TELEGRAM_BOT_TOKEN: 'test_token', TELEGRAM_API_URL: tg.url, ...PROXY });
+  assert.ok(base, `server exited with ${exitCode}`);
+  assert.ok(await waitFor(async () => (await telegramStatus(base, signedInAs('sarah@example.test')))?.status === 'connected'), 'bridge never connected');
+
+  assert.equal((await fetch(base + '/api/telegram/pair', { method: 'DELETE', ...signedInAs('sarah@example.test') })).status, 200);
+  assert.deepEqual(readDb(dir).settings.tgUsers, {});
+
+  tg.push(message(SARAH_CHAT, 'after unlink'));
+  assert.ok(await waitFor(() => tg.sent.some((m) => m.chat_id === SARAH_CHAT && /private/i.test(m.text))), 'chat was not refused');
+  assert.deepEqual(await (await fetch(base + '/api/notes', signedInAs('sarah@example.test'))).json(), []);
+});
+
+test('with sign-in on, an unknown chat is refused instead of taking the admin board', { timeout: 15000 }, async (t) => {
+  const tg = await fakeTelegram(t, { updates: [message(STRANGER, 'hello'), message(STRANGER, '/start ZZZZZZ')] });
+  const dir = tmpDataDir(t);
+  seedDb(dir, { users: USERS });
+  const { base, exitCode } = await boot(t, dir, { TELEGRAM_BOT_TOKEN: 'test_token', TELEGRAM_API_URL: tg.url, ...PROXY });
+  assert.ok(base, `server exited with ${exitCode}`);
+
+  assert.ok(await waitFor(() => tg.sent.filter((m) => m.chat_id === STRANGER).length >= 2), 'stranger did not get two replies');
+  const replies = tg.sent.filter((m) => m.chat_id === STRANGER).map((m) => m.text);
+  assert.match(replies[0], /private/i);
+  assert.match(replies[1], /code/i, 'a bad pairing code should say so');
+  assert.deepEqual(await (await fetch(base + '/api/notes', signedInAs('brent@example.test'))).json(), []);
+  const { settings } = readDb(dir);
+  assert.equal(settings.telegramChats, undefined, 'the first-chat lock engaged with sign-in on');
+  assert.deepEqual(settings.tgUsers || {}, {});
+});
+
+test('without sign-in the bot still locks to the first chat that messages it', { timeout: 15000 }, async (t) => {
+  const tg = await fakeTelegram(t, { updates: [message(OWNER, 'first')] });
+  const dir = tmpDataDir(t);
+  const { base, exitCode } = await boot(t, dir, { TELEGRAM_BOT_TOKEN: 'test_token', TELEGRAM_API_URL: tg.url });
+  assert.ok(base, `server exited with ${exitCode}`);
+
+  assert.ok(await waitFor(() => tg.sent.some((m) => /added/i.test(m.text))), 'message not confirmed');
+  assert.deepEqual((await (await fetch(base + '/api/notes')).json()).map((n) => n.text), ['first']);
+  assert.deepEqual(readDb(dir).settings.telegramChats, [OWNER]);
 });
